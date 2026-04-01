@@ -4,7 +4,6 @@
 
 {% block content %}
 <h1>Add New Patient</h1>
-<p style="color: #718096; margin-bottom: 20px;">Manually add a patient to the system</p>
 
 <div class="card" style="max-width: 600px;">
     <form method="POST" id="addPatientForm">
@@ -16,6 +15,12 @@
         <div class="form-group">
             <label for="phone">Phone Number *</label>
             <input type="tel" id="phone" name="phone" value="{{ form_data.phone if form_data else '' }}" required placeholder="e.g., 012-3456789">
+        </div>
+        
+        <div class="form-group">
+            <label for="email">Email (for appointment reminders)</label>
+            <input type="email" id="email" name="email" value="{{ form_data.email if form_data else '' }}" placeholder="e.g., patient@email.com">
+            <p style="font-size: 12px; color: #718096; margin-top: 5px;">Optional. Patient will receive email reminders before appointments.</p>
         </div>
         
         <div class="form-group">
@@ -35,10 +40,91 @@
             </label>
         </div>
         
+        <div class="form-group">
+            <label>Patient Signature</label>
+            <p style="font-size: 14px; color: #718096; margin-bottom: 10px;">Please sign below:</p>
+            <canvas id="signaturePad" width="600" height="200" style="border: 2px solid #e2e8f0; border-radius: 8px; background: white; cursor: crosshair; max-width: 100%;"></canvas>
+            <input type="hidden" id="signatureData" name="signature_data">
+            <div style="margin-top: 10px;">
+                <button type="button" onclick="clearSignature()" class="btn btn-sm btn-secondary">Clear Signature</button>
+            </div>
+        </div>
+        
         <div style="display: flex; gap: 15px; margin-top: 30px;">
             <button type="submit" class="btn btn-success" style="flex: 1;">Add Patient</button>
             <a href="{{ url_for('list_patients') }}" class="btn btn-secondary">Cancel</a>
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const canvas = document.getElementById('signaturePad');
+const ctx = canvas.getContext('2d');
+let isDrawing = false;
+let lastX = 0;
+let lastY = 0;
+
+// Set up canvas
+ctx.strokeStyle = '#000';
+ctx.lineWidth = 2;
+ctx.lineCap = 'round';
+
+function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX || e.touches[0].clientX) - rect.left;
+    const y = (e.clientY || e.touches[0].clientY) - rect.top;
+    return { x, y };
+}
+
+function startDrawing(e) {
+    isDrawing = true;
+    const pos = getPos(e);
+    lastX = pos.x;
+    lastY = pos.y;
+}
+
+function draw(e) {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    lastX = pos.x;
+    lastY = pos.y;
+}
+
+function stopDrawing() {
+    isDrawing = false;
+    document.getElementById('signatureData').value = canvas.toDataURL();
+}
+
+function clearSignature() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    document.getElementById('signatureData').value = '';
+}
+
+// Mouse events
+canvas.addEventListener('mousedown', startDrawing);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', stopDrawing);
+canvas.addEventListener('mouseout', stopDrawing);
+
+// Touch events
+canvas.addEventListener('touchstart', startDrawing);
+canvas.addEventListener('touchmove', draw);
+canvas.addEventListener('touchend', stopDrawing);
+
+// Form validation
+document.getElementById('addPatientForm').addEventListener('submit', function(e) {
+    if (!document.getElementById('signatureData').value) {
+        e.preventDefault();
+        alert('Please provide a signature');
+        return false;
+    }
+});
+</script>
 {% endblock %}

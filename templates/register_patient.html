@@ -53,9 +53,15 @@
         
         <div class="form-group">
             <label>Patient Signature</label>
+            {% if patient.signature %}
+            <div style="margin-bottom: 10px;">
+                <p style="font-size: 14px; color: #2d8a4e; margin-bottom: 8px;">✓ Signature on file. Draw below to update if needed:</p>
+            </div>
+            {% else %}
             <p style="font-size: 14px; color: #718096; margin-bottom: 10px;">Please sign below:</p>
+            {% endif %}
             <canvas id="signaturePad" width="600" height="200" style="border: 2px solid #e2e8f0; border-radius: 8px; background: white; cursor: crosshair; max-width: 100%;"></canvas>
-            <input type="hidden" id="signatureData" name="signature_data">
+            <input type="hidden" id="signatureData" name="signature_data" value="{{ patient.signature or '' }}">
             <div style="margin-top: 10px;">
                 <button type="button" onclick="clearSignature()" class="btn btn-sm btn-secondary">Clear Signature</button>
             </div>
@@ -130,7 +136,19 @@ canvas.addEventListener('touchstart', startDrawing);
 canvas.addEventListener('touchmove', draw);
 canvas.addEventListener('touchend', stopDrawing);
 
-// Form validation
+// Load existing signature if available
+{% if patient.signature %}
+window.addEventListener('load', function() {
+    const existingSignature = '{{ patient.signature|safe }}';
+    if (existingSignature) {
+        const img = new Image();
+        img.onload = function() {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        img.src = existingSignature;
+    }
+});
+{% endif %}
 document.getElementById('registrationForm').addEventListener('submit', function(e) {
     if (!document.getElementById('signatureData').value) {
         e.preventDefault();

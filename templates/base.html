@@ -13,8 +13,9 @@
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(180deg, #c5d5e0 0%, #a8bcc9 100%);
             min-height: 100vh;
+            padding-top: 70px;
         }
         
         .container {
@@ -48,12 +49,12 @@
         }
         
         .btn-primary {
-            background: #667eea;
+            background: #2d8a4e;
             color: white;
         }
         
         .btn-primary:hover {
-            background: #5a6fd6;
+            background: #237a3f;
             transform: translateY(-2px);
         }
         
@@ -119,7 +120,7 @@
         select:focus,
         textarea:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #2d8a4e;
         }
         
         textarea {
@@ -158,13 +159,17 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
         }
         
         .navbar-brand {
             font-size: 24px;
             font-weight: bold;
-            color: #667eea;
+            color: #1a3a4a;
             display: flex;
             align-items: center;
             gap: 12px;
@@ -179,7 +184,7 @@
         .navbar-brand .logo {
             width: 36px;
             height: 36px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #2d8a4e;
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -207,7 +212,7 @@
         }
         
         .navbar-nav a:hover {
-            color: #667eea;
+            color: #2d8a4e;
         }
         
         .user-info {
@@ -267,7 +272,7 @@
         }
         
         .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #2d8a4e 0%, #1e6b38 100%);
             color: white;
             padding: 25px;
             border-radius: 12px;
@@ -302,20 +307,20 @@
         }
         
         .slot-btn:hover {
-            border-color: #667eea;
-            background: #f7fafc;
+            border-color: #2d8a4e;
+            background: #f0f7f2;
         }
         
         .slot-btn.selected {
-            background: #667eea;
+            background: #2d8a4e;
             color: white;
-            border-color: #667eea;
+            border-color: #2d8a4e;
         }
         
         .slot-btn.occupied-by-selection {
-            background: #bee3f8;
-            color: #2b6cb0;
-            border-color: #90cdf4;
+            background: #d4edda;
+            color: #1e6b38;
+            border-color: #2d8a4e;
             opacity: 0.8;
         }
         
@@ -331,8 +336,8 @@
         }
         
         .time-block.occupied {
-            border-color: #667eea;
-            background: #f7fafc;
+            border-color: #2d8a4e;
+            background: #f0f7f2;
         }
         
         .time-block .time {

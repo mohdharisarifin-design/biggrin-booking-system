@@ -255,12 +255,40 @@ def admin_dashboard():
     # Get total patients
     total_patients = Patient.query.count()
     
+    # Get patient growth over time (last 6 months)
+    from sqlalchemy import func
+    end_date = today
+    start_date = end_date - timedelta(days=180)  # 6 months ago
+    
+    patient_growth = db.session.query(
+        func.date(Patient.registered_at).label('date'),
+        func.count(Patient.id).label('count')
+    ).filter(
+        Patient.registered_at >= start_date
+    ).group_by(
+        func.date(Patient.registered_at)
+    ).order_by(
+        func.date(Patient.registered_at)
+    ).all()
+    
+    # Prepare data for chart
+    growth_dates = []
+    growth_counts = []
+    cumulative_count = 0
+    
+    for row in patient_growth:
+        growth_dates.append(row.date.strftime('%d %b'))
+        cumulative_count += row.count
+        growth_counts.append(cumulative_count)
+    
     return render_template('admin_dashboard.html', 
                          today_appointments=today_appointments,
                          upcoming_count=upcoming_count,
                          total_patients=total_patients,
                          today=today,
-                         appointment_types=APPOINTMENT_TYPES)
+                         appointment_types=APPOINTMENT_TYPES,
+                         growth_dates=growth_dates,
+                         growth_counts=growth_counts)
 
 @app.route('/admin/book', methods=['GET', 'POST'])
 def book_appointment():
@@ -513,9 +541,11 @@ def add_patient():
     if request.method == 'POST':
         name = request.form['name']
         phone = request.form['phone']
+        email = request.form.get('email', '').strip() or None
         nric = request.form.get('nric', '').strip()
         is_foreign = request.form.get('is_foreign') == 'on'
         address = request.form.get('address', '').strip()
+        signature_data = request.form.get('signature_data', '').strip()
         
         # Check if patient with this phone already exists
         existing = Patient.query.filter_by(phone=phone).first()
@@ -527,9 +557,11 @@ def add_patient():
         patient = Patient(
             name=name,
             phone=phone,
+            email=email,
             nric=nric or None,
             is_foreign=is_foreign,
-            address=address or None
+            address=address or None,
+            signature=signature_data or None
         )
         db.session.add(patient)
         db.session.commit()
