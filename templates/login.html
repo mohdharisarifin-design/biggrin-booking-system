@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Dental Clinic{% endblock %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 50px auto;">
+    <div class="card" style="text-align: center;">
+        <h1 style="color: #667eea; margin-bottom: 10px;">Dental Clinic</h1>
+        <p style="color: #718096; margin-bottom: 30px;">Appointment Management System</p>
+        
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autofocus>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
+        </form>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: left;">
+            <p style="font-size: 14px; color: #718096; margin-bottom: 10px;"><strong>Default Login Credentials:</strong></p>
+            <p style="font-size: 13px; color: #a0aec0;">
+                <strong>Admin:</strong> username: <code>admin</code> / password: <code>admin123</code><br>
+                <strong>Doctor:</strong> username: <code>doctor</code> / password: <code>doctor123</code>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

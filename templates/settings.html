@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Dental Clinic{% endblock %}
+
+{% block content %}
+<h1>Settings</h1>
+<p style="color: white; margin-bottom: 30px;">Manage your account settings and preferences.</p>
+
+<div class="grid">
+    <div class="card">
+        <h2>Change Password</h2>
+        <p style="color: #718096; margin-bottom: 20px;">Update your admin password for security.</p>
+        
+        <form method="POST" action="{{ url_for('change_password') }}">
+            <div class="form-group">
+                <label for="current_password">Current Password</label>
+                <input type="password" id="current_password" name="current_password" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="new_password">New Password</label>
+                <input type="password" id="new_password" name="new_password" required minlength="6">
+            </div>
+            
+            <div class="form-group">
+                <label for="confirm_password">Confirm New Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Update Password</button>
+        </form>
+    </div>
+    
+    <div class="card">
+        <h2>Account Information</h2>
+        <p style="color: #718096; margin-bottom: 20px;">Your account details.</p>
+        
+        <div style="margin-bottom: 15px;">
+            <strong>Username:</strong> {{ user.username }}
+        </div>
+        <div style="margin-bottom: 15px;">
+            <strong>Name:</strong> {{ user.name }}
+        </div>
+        <div style="margin-bottom: 15px;">
+            <strong>Role:</strong> {{ user.role.title() }}
+        </div>
+    </div>
+</div>
+
+<!-- User Management Section -->
+<div class="card" style="margin-top: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">User Management</h2>
+        <button type="button" class="btn btn-success" onclick="toggleAddUserForm()">+ Add New User</button>
+    </div>
+    <p style="color: #718096; margin-bottom: 20px;">Manage staff accounts. Create temporary access for locum dental assistants.</p>
+    
+    <!-- Add User Form (hidden by default) -->
+    <div id="addUserForm" style="display: none; margin-bottom: 30px; padding: 20px; background: #f7fafc; border-radius: 8px;">
+        <h3 style="margin-top: 0; margin-bottom: 20px;">Add New User</h3>
+        <form method="POST" action="{{ url_for('create_user') }}">
+            <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label for="new_username">Username</label>
+                    <input type="text" id="new_username" name="username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="new_name">Full Name</label>
+                    <input type="text" id="new_name" name="name" required>
+                </div>
+            </div>
+            
+            <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label for="new_password">Password</label>
+                    <input type="password" id="new_password" name="password" required minlength="6">
+                </div>
+                
+                <div class="form-group">
+                    <label for="new_role">Role</label>
+                    <select id="new_role" name="role" required>
+                        <option value="doctor">Doctor</option>
+                        <option value="assistant">Dental Assistant</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="toggleAddUserForm()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create User</button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Users Table -->
+    {% if users %}
+    <table>
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr id="user-row-{{ u.id }}">
+                <td><strong>{{ u.username }}</strong></td>
+                <td>{{ u.name }}</td>
+                <td>
+                    <span class="badge badge-{{ 'completed' if u.role == 'admin' else 'scheduled' }}">{{ u.role.title() }}</span>
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleEditForm({{ u.id }})">Edit</button>
+                    {% if u.role != 'admin' %}
+                    <form method="POST" action="{{ url_for('delete_user', id=u.id) }}" style="display: inline;" onsubmit="return confirm('Delete user {{ u.username }}? This cannot be undone.');">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr id="edit-row-{{ u.id }}" style="display: none; background: #f7fafc;">
+                <td colspan="4" style="padding: 20px;">
+                    <form method="POST" action="{{ url_for('edit_user', id=u.id) }}" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                        <div class="form-group" style="margin: 0; flex: 1; min-width: 150px;">
+                            <label style="font-size: 12px; margin-bottom: 5px;">Username</label>
+                            <input type="text" name="username" value="{{ u.username }}" required style="padding: 8px; font-size: 14px;">
+                        </div>
+                        <div class="form-group" style="margin: 0; flex: 1; min-width: 150px;">
+                            <label style="font-size: 12px; margin-bottom: 5px;">Full Name</label>
+                            <input type="text" name="name" value="{{ u.name }}" required style="padding: 8px; font-size: 14px;">
+                        </div>
+                        <div class="form-group" style="margin: 0; flex: 0 0 120px;">
+                            <label style="font-size: 12px; margin-bottom: 5px;">Role</label>
+                            <select name="role" required style="padding: 8px; font-size: 14px;">
+                                <option value="doctor" {{ 'selected' if u.role == 'doctor' else '' }}>Doctor</option>
+                                <option value="assistant" {{ 'selected' if u.role == 'assistant' else '' }}>Assistant</option>
+                                {% if u.role == 'admin' %}
+                                <option value="admin" selected>Admin</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0; flex: 1; min-width: 150px;">
+                            <label style="font-size: 12px; margin-bottom: 5px;">New Password (leave blank to keep current)</label>
+                            <input type="password" name="password" placeholder="Optional" style="padding: 8px; font-size: 14px;">
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="btn btn-secondary" onclick="toggleEditForm({{ u.id }})" style="padding: 8px 16px; font-size: 14px;">Cancel</button>
+                            <button type="submit" class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;">Save</button>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #a0aec0;">
+        <p>No additional users configured</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Appointment Reminders Section -->
+<div class="card" style="margin-top: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Appointment Reminders</h2>
+        <form method="POST" action="{{ url_for('manual_send_reminders') }}" style="display: inline;">
+            <button type="submit" class="btn btn-success">Send Reminders Now</button>
+        </form>
+    </div>
+    <p style="color: #718096; margin-bottom: 20px;">Automatically send email reminders to patients before their appointments.</p>
+    
+    <form method="POST" action="{{ url_for('update_reminder_config') }}">
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="enabled" {{ 'checked' if reminder_config.enabled else '' }}>
+                    Enable Automatic Reminders
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label for="hours_before">Hours Before Appointment</label>
+                <input type="number" id="hours_before" name="hours_before" value="{{ reminder_config.hours_before }}" min="1" max="168" style="width: 100%;">
+            </div>
+        </div>
+        
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="form-group">
+                <label for="clinic_phone">Clinic Phone</label>
+                <input type="text" id="clinic_phone" name="clinic_phone" value="{{ reminder_config.clinic_phone }}" style="width: 100%;">
+            </div>
+            
+            <div class="form-group">
+                <label for="clinic_address">Clinic Address</label>
+                <input type="text" id="clinic_address" name="clinic_address" value="{{ reminder_config.clinic_address }}" style="width: 100%;">
+            </div>
+        </div>
+        
+        <!-- SMTP Settings -->
+        <div style="margin: 30px 0; padding: 20px; background: #f7fafc; border-radius: 8px;">
+            <h3 style="margin-top: 0; margin-bottom: 15px;">SMTP Email Settings</h3>
+            <p style="color: #718096; margin-bottom: 20px; font-size: 14px;">Configure email server to send real appointment reminders. Leave blank to use test mode (prints to console only).</p>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="test_mode" {{ 'checked' if reminder_config.test_mode else '' }}>
+                    Test Mode (ON = preview only, OFF = send real emails)
+                </label>
+            </div>
+            
+            <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 15px;">
+                <div class="form-group">
+                    <label for="smtp_server">SMTP Server</label>
+                    <input type="text" id="smtp_server" name="smtp_server" value="{{ reminder_config.smtp_server or '' }}" placeholder="e.g., smtp.gmail.com" style="width: 100%;">
+                </div>
+                
+                <div class="form-group">
+                    <label for="smtp_port">Port</label>
+                    <input type="number" id="smtp_port" name="smtp_port" value="{{ reminder_config.smtp_port or 587 }}" style="width: 100%;">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="smtp_username">SMTP Username (Email Address)</label>
+                <input type="text" id="smtp_username" name="smtp_username" value="{{ reminder_config.smtp_username or '' }}" placeholder="your-email@gmail.com" style="width: 100%;">
+            </div>
+            
+            <div class="form-group">
+                <label for="smtp_password">SMTP Password / App Password</label>
+                <input type="password" id="smtp_password" name="smtp_password" value="{{ reminder_config.smtp_password or '' }}" placeholder="Enter password" style="width: 100%;">
+                <p style="font-size: 12px; color: #718096; margin-top: 5px;">For Gmail, use an <a href="https://support.google.com/accounts/answer/185833" target="_blank">App Password</a> instead of your regular password.</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="smtp_from_email">From Email (optional)</label>
+                <input type="email" id="smtp_from_email" name="smtp_from_email" value="{{ reminder_config.smtp_from_email or '' }}" placeholder="Leave blank to use SMTP username" style="width: 100%;">
+            </div>
+        </div>
+        
+        <!-- WhatsApp Settings -->
+        <div style="margin: 30px 0; padding: 20px; background: #f7fafc; border-radius: 8px;">
+            <h3 style="margin-top: 0; margin-bottom: 15px;">WhatsApp Reminder Settings</h3>
+            <p style="color: #718096; margin-bottom: 20px; font-size: 14px;">Send appointment reminders via WhatsApp (works great in Malaysia!). Choose CallMeBot (free, 1 msg/day) or Twilio (paid, reliable).</p>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="whatsapp_enabled" {{ 'checked' if reminder_config.whatsapp_enabled else '' }}>
+                    Enable WhatsApp Reminders
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label for="whatsapp_api">WhatsApp API Provider</label>
+                <select id="whatsapp_api" name="whatsapp_api" style="width: 100%;">
+                    <option value="callmebot" {{ 'selected' if reminder_config.whatsapp_api == 'callmebot' else '' }}>CallMeBot (Free - 1 message/day limit)</option>
+                    <option value="twilio" {{ 'selected' if reminder_config.whatsapp_api == 'twilio' else '' }}>Twilio (Paid - Professional service)</option>
+                </select>
+            </div>
+            
+            <!-- CallMeBot Settings -->
+            <div id="callmebot_settings" style="margin-top: 15px;">
+                <div class="form-group">
+                    <label for="whatsapp_api_key">CallMeBot API Key</label>
+                    <input type="text" id="whatsapp_api_key" name="whatsapp_api_key" value="{{ reminder_config.whatsapp_api_key or '' }}" placeholder="Get key from callmebot.com" style="width: 100%;">
+                    <p style="font-size: 12px; color: #718096; margin-top: 5px;">Get your free API key at <a href="https://www.callmebot.com/blog/free-api-whatsapp-messages/" target="_blank">callmebot.com</a>. Start chat with their bot first.</p>
+                </div>
+            </div>
+            
+            <!-- Twilio Settings -->
+            <div id="twilio_settings" style="margin-top: 15px; display: none;">
+                <div class="form-group">
+                    <label for="twilio_sid">Twilio Account SID</label>
+                    <input type="text" id="twilio_sid" name="twilio_sid" value="{{ reminder_config.twilio_sid or '' }}" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxx" style="width: 100%;">
+                </div>
+                
+                <div class="form-group">
+                    <label for="twilio_token">Twilio Auth Token</label>
+                    <input type="password" id="twilio_token" name="twilio_token" value="{{ reminder_config.twilio_token or '' }}" placeholder="Your Twilio auth token" style="width: 100%;">
+                </div>
+                
+                <div class="form-group">
+                    <label for="twilio_whatsapp_number">Twilio WhatsApp Number</label>
+                    <input type="text" id="twilio_whatsapp_number" name="twilio_whatsapp_number" value="{{ reminder_config.twilio_whatsapp_number or '' }}" placeholder="+14155238886 (sandbox) or your number" style="width: 100%;">
+                    <p style="font-size: 12px; color: #718096; margin-top: 5px;">Sign up at <a href="https://www.twilio.com/try-twilio" target="_blank">twilio.com</a>. Use sandbox number +14155238886 for testing.</p>
+                </div>
+            </div>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Save Reminder Settings</button>
+    </form>
+    
+    <!-- Recent Reminder Logs -->
+    {% if reminder_logs %}
+    <div style="margin-top: 30px;">
+        <h3>Recent Reminder Activity</h3>
+        <table style="margin-top: 15px;">
+            <thead>
+                <tr>
+                    <th>Date Sent</th>
+                    <th>Patient</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in reminder_logs %}
+                <tr>
+                    <td>{{ log.sent_at.strftime('%d %b %Y %H:%M') }}</td>
+                    <td>{{ log.appointment.patient.name }}</td>
+                    <td>{{ log.reminder_type.upper() }}</td>
+                    <td>
+                        <span class="badge badge-{{ 'completed' if log.status == 'sent' else 'cancelled' }}">{{ log.status.title() }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{% block extra_js %}
+<script>
+function toggleAddUserForm() {
+    const form = document.getElementById('addUserForm');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+function toggleEditForm(userId) {
+    const editRow = document.getElementById('edit-row-' + userId);
+    editRow.style.display = editRow.style.display === 'none' ? 'table-row' : 'none';
+}
+
+// Toggle WhatsApp API settings visibility
+function toggleWhatsAppSettings() {
+    const apiSelect = document.getElementById('whatsapp_api');
+    const callmebotSettings = document.getElementById('callmebot_settings');
+    const twilioSettings = document.getElementById('twilio_settings');
+    
+    if (apiSelect.value === 'callmebot') {
+        callmebotSettings.style.display = 'block';
+        twilioSettings.style.display = 'none';
+    } else {
+        callmebotSettings.style.display = 'none';
+        twilioSettings.style.display = 'block';
+    }
+}
+
+// Initialize WhatsApp settings visibility on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const apiSelect = document.getElementById('whatsapp_api');
+    if (apiSelect) {
+        apiSelect.addEventListener('change', toggleWhatsAppSettings);
+        toggleWhatsAppSettings(); // Set initial state
+    }
+});
+</script>
+{% endblock %}
+
+{% endblock %}

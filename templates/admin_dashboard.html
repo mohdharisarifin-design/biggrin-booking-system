@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Dental Clinic{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+<p style="color: white; margin-bottom: 30px;">Welcome back, {{ session.get('name') }}! Here's what's happening today.</p>
+
+<div class="grid">
+    <div class="stat-card">
+        <h3>Today's Appointments</h3>
+        <div class="number">{{ today_appointments|length }}</div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);">
+        <h3>Upcoming (7 Days)</h3>
+        <div class="number">{{ upcoming_count }}</div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);">
+        <h3>Total Patients</h3>
+        <div class="number">{{ total_patients }}</div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">Today's Schedule ({{ today.strftime('%A, %d %B %Y') }})</h2>
+        <a href="{{ url_for('book_appointment') }}" class="btn btn-success">+ Book New Appointment</a>
+    </div>
+    
+    {% if today_appointments %}
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Patient</th>
+                <th>Phone</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for appt in today_appointments %}
+            <tr data-appt-id="{{ appt.id }}">
+                <td>{{ appt.start_time.strftime('%H:%M') }} - {{ appt.end_time.strftime('%H:%M') }}</td>
+                <td><strong>{{ appt.patient.name }}</strong></td>
+                <td>{{ appt.patient.phone }}</td>
+                <td>{{ appointment_types[appt.appointment_type].name }}</td>
+                <td>
+                    <span class="badge badge-{{ appt.status }}">{{ appt.status.title() }}</span>
+                </td>
+                <td>
+                    {% set current_time = appt.start_time.strftime('%H:%M') ~ ' - ' ~ appt.end_time.strftime('%H:%M') %}
+                    <button type="button" class="btn btn-sm btn-secondary" onclick='openReschedulePanel({{ appt.id }}, {{ appt.patient.name|tojson }}, {{ appt.appointment_date.strftime('%Y-%m-%d')|tojson }}, {{ current_time|tojson }}, {{ appointment_types[appt.appointment_type].name|tojson }})'>Reschedule</button>
+                    <form method="POST" action="{{ url_for('cancel_appointment', id=appt.id) }}" style="display: inline;" onsubmit="return confirm('Cancel this appointment?');">
+                        <button type="submit" class="btn btn-sm btn-danger">Cancel</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #a0aec0;">
+        <p style="font-size: 18px; margin-bottom: 10px;">No appointments scheduled for today</p>
+        <p style="font-size: 14px;">Enjoy your free time or book a walk-in patient</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Inline Reschedule Panel -->
+<div id="reschedulePanel" class="card" style="margin-top: 20px; display: none; background: #f7fafc; border: 2px solid #4299e1;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0; color: #2b6cb0;">Reschedule Appointment</h3>
+        <button type="button" class="btn btn-secondary" onclick="closeReschedulePanel()">Close</button>
+    </div>
+    
+    <div id="rescheduleInfo" style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 8px;">
+        <p><strong>Patient:</strong> <span id="reschedulePatientName"></span></p>
+        <p><strong>Current:</strong> <span id="rescheduleCurrentTime"></span></p>
+        <p><strong>Type:</strong> <span id="rescheduleType"></span></p>
+    </div>
+    
+    <div class="grid" style="grid-template-columns: 1fr 2fr; gap: 20px;">
+        <!-- Mini Calendar -->
+        <div>
+            <label style="display: block; margin-bottom: 10px; font-weight: 500;">Select New Date</label>
+            <div id="miniCalendar" style="background: white; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <button type="button" onclick="changeMonth(-1)" class="btn btn-sm btn-secondary">&lt;</button>
+                    <span id="calendarMonthYear" style="font-weight: 600;"></span>
+                    <button type="button" onclick="changeMonth(1)" class="btn btn-sm btn-secondary">&gt;</button>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; font-size: 12px; margin-bottom: 5px;">
+                    <div style="color: #718096;">Su</div>
+                    <div style="color: #718096;">Mo</div>
+                    <div style="color: #718096;">Tu</div>
+                    <div style="color: #718096;">We</div>
+                    <div style="color: #718096;">Th</div>
+                    <div style="color: #718096;">Fr</div>
+                    <div style="color: #718096;">Sa</div>
+                </div>
+                <div id="calendarDays" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;"></div>
+            </div>
+            <input type="hidden" id="rescheduleApptId">
+            <input type="hidden" id="selectedDate">
+        </div>
+        
+        <!-- Available Slots -->
+        <div>
+            <label style="display: block; margin-bottom: 10px; font-weight: 500;">Available Time Slots</label>
+            <div id="availableSlots" style="background: white; border-radius: 8px; padding: 15px; min-height: 150px;">
+                <p style="color: #718096; text-align: center; padding: 40px 20px;">Select a date to see available slots</p>
+            </div>
+            <input type="hidden" id="selectedTime">
+        </div>
+    </div>
+    
+    <div style="margin-top: 20px; display: flex; gap: 15px; justify-content: flex-end;">
+        <button type="button" class="btn btn-success" id="confirmRescheduleBtn" onclick="confirmReschedule()" disabled>Confirm Reschedule</button>
+        <button type="button" class="btn btn-secondary" onclick="closeReschedulePanel()">Cancel</button>
+    </div>
+</div>
+
+<div class="grid" style="margin-top: 20px;">
+    <div class="card">
+        <h3>Quick Actions</h3>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+            <a href="{{ url_for('book_appointment') }}" class="btn btn-primary">Book Appointment</a>
+            <a href="{{ url_for('add_patient') }}" class="btn btn-success">Add New Patient</a>
+            <a href="{{ url_for('view_appointments') }}" class="btn btn-secondary">View All Appointments</a>
+            <a href="{{ url_for('list_patients') }}" class="btn btn-secondary">Patient Directory</a>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3>Clinic Hours</h3>
+        <div style="margin-top: 15px;">
+            <p><strong>Monday:</strong> Closed</p>
+            <p style="margin-top: 5px;"><strong>Tuesday - Friday:</strong> 9:00 AM - 5:00 PM</p>
+            <p style="margin-top: 5px;"><strong>Saturday - Sunday:</strong> 9:00 AM - 1:30 PM</p>
+            <p style="margin-top: 15px; color: #718096; font-size: 14px;">
+                Appointment slots: 30 minutes<br>
+                Scaling: 30 min | Extraction: 90 min
+            </p>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentCalendarDate = new Date();
+let currentApptId = null;
+
+function openReschedulePanel(apptId, patientName, currentDate, currentTime, type) {
+    currentApptId = apptId;
+    document.getElementById('rescheduleApptId').value = apptId;
+    document.getElementById('reschedulePatientName').textContent = patientName;
+    document.getElementById('rescheduleCurrentTime').textContent = currentDate + ' ' + currentTime;
+    document.getElementById('rescheduleType').textContent = type;
+    document.getElementById('selectedDate').value = '';
+    document.getElementById('selectedTime').value = '';
+    document.getElementById('confirmRescheduleBtn').disabled = true;
+    document.getElementById('availableSlots').innerHTML = '<p style="color: #718096; text-align: center; padding: 40px 20px;">Select a date to see available slots</p>';
+    
+    // Set calendar to current appointment date
+    currentCalendarDate = new Date(currentDate);
+    renderCalendar();
+    
+    document.getElementById('reschedulePanel').style.display = 'block';
+    document.getElementById('reschedulePanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function closeReschedulePanel() {
+    document.getElementById('reschedulePanel').style.display = 'none';
+    currentApptId = null;
+}
+
+function changeMonth(delta) {
+    currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
+    renderCalendar();
+}
+
+function renderCalendar() {
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    document.getElementById('calendarMonthYear').textContent = 
+        monthNames[currentCalendarDate.getMonth()] + ' ' + currentCalendarDate.getFullYear();
+    
+    const year = currentCalendarDate.getFullYear();
+    const month = currentCalendarDate.getMonth();
+    
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDay = firstDay.getDay();
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    let html = '';
+    
+    // Empty cells for days before start of month
+    for (let i = 0; i < startingDay; i++) {
+        html += '<div></div>';
+    }
+    
+    // Days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        const dateStr = date.toISOString().split('T')[0];
+        const isPast = date < today;
+        const isSelected = document.getElementById('selectedDate').value === dateStr;
+        const dayOfWeek = date.getDay();
+        const isMonday = dayOfWeek === 1; // 1 = Monday
+        
+        let className = 'calendar-day';
+        if (isPast) className += ' past';
+        if (isSelected) className += ' selected';
+        if (isMonday) className += ' closed';
+        
+        let onclick, style;
+        if (isPast || isMonday) {
+            onclick = '';
+            style = 'style="color: #cbd5e0; cursor: not-allowed; background: #fed7d7;"';
+        } else if (isSelected) {
+            style = 'style="background: #4299e1; color: white; border-radius: 4px;"';
+            onclick = "onclick=\"selectDate('" + dateStr + "', this)\"";
+        } else {
+            style = 'style="cursor: pointer; border-radius: 4px;"';
+            onclick = "onclick=\"selectDate('" + dateStr + "', this)\"";
+        }
+        
+        html += '<div class="' + className + '" ' + style + ' ' + onclick + '>' + day + '</div>';
+    }
+    
+    document.getElementById('calendarDays').innerHTML = html;
+}
+
+function selectDate(dateStr, element) {
+    document.getElementById('selectedDate').value = dateStr;
+    document.getElementById('selectedTime').value = '';
+    document.getElementById('confirmRescheduleBtn').disabled = true;
+    
+    // Update visual selection
+    document.querySelectorAll('.calendar-day').forEach(el => {
+        el.style.background = '';
+        el.style.color = '';
+    });
+    element.style.background = '#4299e1';
+    element.style.color = 'white';
+    
+    // Fetch available slots
+    fetchAvailableSlots(dateStr);
+}
+
+function fetchAvailableSlots(dateStr) {
+    const slotsContainer = document.getElementById('availableSlots');
+    const date = new Date(dateStr);
+    
+    // Check if Monday
+    if (date.getDay() === 1) {
+        slotsContainer.innerHTML = '<p style="color: #e53e3e; text-align: center; padding: 40px; font-weight: bold;">Clinic is closed on Mondays</p>';
+        return;
+    }
+    
+    slotsContainer.innerHTML = '<p style="text-align: center; padding: 40px;">Loading...</p>';
+    
+    fetch('/api/slots?date=' + dateStr + '&exclude_id=' + currentApptId)
+        .then(response => response.json())
+        .then(data => {
+            if (data.slots && data.slots.length > 0) {
+                let html = '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">';
+                data.slots.forEach(slot => {
+                    html += '<button type="button" class="slot-btn" onclick="selectSlot(\'' + slot + '\', this)">' + slot + '</button>';
+                });
+                html += '</div>';
+                slotsContainer.innerHTML = html;
+            } else {
+                slotsContainer.innerHTML = '<p style="color: #e53e3e; text-align: center; padding: 40px;">No available slots for this date</p>';
+            }
+        })
+        .catch(error => {
+            slotsContainer.innerHTML = '<p style="color: #e53e3e; text-align: center; padding: 40px;">Error loading slots</p>';
+        });
+}
+
+function selectSlot(time, button) {
+    document.getElementById('selectedTime').value = time;
+    
+    // Update visual selection
+    document.querySelectorAll('.slot-btn').forEach(btn => {
+        btn.classList.remove('selected');
+        btn.style.background = '';
+        btn.style.color = '';
+    });
+    button.classList.add('selected');
+    button.style.background = '#48bb78';
+    button.style.color = 'white';
+    
+    document.getElementById('confirmRescheduleBtn').disabled = false;
+}
+
+function confirmReschedule() {
+    const apptId = document.getElementById('rescheduleApptId').value;
+    const newDate = document.getElementById('selectedDate').value;
+    const newTime = document.getElementById('selectedTime').value;
+    
+    if (!apptId || !newDate || !newTime) {
+        alert('Please select a date and time');
+        return;
+    }
+    
+    fetch('/api/appointment/' + apptId + '/reschedule', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            new_date: newDate,
+            new_time: newTime
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to reschedule'));
+        }
+    })
+    .catch(error => {
+        alert('Error rescheduling appointment');
+    });
+}
+</script>
+{% endblock %}

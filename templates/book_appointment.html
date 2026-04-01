@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+
+{% block title %}Book Appointment - Dental Clinic{% endblock %}
+
+{% block content %}
+<h1>Book Appointment</h1>
+
+<div style="max-width: 600px;">
+    <form method="POST" id="bookingForm">
+        <div class="card">
+            <h3>Appointment Details</h3>
+            
+            <div class="form-group">
+                <label for="appointment_date">Date *</label>
+                <input type="date" id="appointment_date" name="appointment_date" value="{{ selected_date.strftime('%Y-%m-%d') }}" required min="{{ today.strftime('%Y-%m-%d') if today else '' }}">
+            </div>
+            
+            <div class="form-group">
+                <label for="appointment_type">Appointment Type *</label>
+                <select id="appointment_type" name="appointment_type" required onchange="updateSlotSelection()">
+                    {% for key, info in appointment_types.items() %}
+                    <option value="{{ key }}" data-duration="{{ info.duration }}" {{ 'selected' if form_data and form_data.appointment_type == key else '' }}>
+                        {{ info.name }} ({{ info.duration }} min)
+                    </option>
+                    {% endfor %}
+                </select>
+                <p id="slotInfo" style="font-size: 13px; color: #4299e1; margin-top: 8px; display: none;">
+                    This appointment will occupy <span id="slotCount"></span> consecutive slots
+                </p>
+            </div>
+            
+            <div class="form-group">
+                <label>Available Time Slots *</label>
+                <p style="font-size: 14px; color: #718096; margin-bottom: 10px;">Select a start time. The system will block the required duration:</p>
+                
+                {% if available_slots %}
+                <div class="slot-grid" id="slotGrid">
+                    {% for slot in available_slots %}
+                    <button type="button" class="slot-btn" data-time="{{ slot.strftime('%H:%M') }}" onclick="selectSlot(this)">
+                        {{ slot.strftime('%H:%M') }}
+                    </button>
+                    {% endfor %}
+                </div>
+                <input type="hidden" id="start_time" name="start_time" required>
+                {% else %}
+                <p style="color: #e53e3e;">No available slots for this date. Please select another date.</p>
+                {% endif %}
+            </div>
+            
+            <div class="form-group">
+                <label for="notes">Notes (Optional)</label>
+                <textarea id="notes" name="notes" placeholder="Any special requirements or notes...">{{ form_data.notes if form_data else '' }}</textarea>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>Patient Information</h3>
+            
+            <div class="form-group" style="position: relative;">
+                <label for="patient_search">Search Existing Patient</label>
+                <input type="text" id="patient_search" placeholder="Type name or phone to search..." autocomplete="off">
+                <div id="patient_dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+                <p style="font-size: 12px; color: #718096; margin-top: 5px;">Start typing to search existing patients, or fill details below for a new patient</p>
+            </div>
+            
+            <input type="hidden" id="patient_id" name="patient_id">
+            
+            <div class="form-group">
+                <label for="patient_name">Patient Name *</label>
+                <input type="text" id="patient_name" name="patient_name" value="{{ form_data.patient_name if form_data else '' }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="phone">Phone Number *</label>
+                <input type="tel" id="phone" name="phone" value="{{ form_data.phone if form_data else '' }}" required placeholder="e.g., 012-3456789">
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email (for appointment reminders)</label>
+                <input type="email" id="email" name="email" value="{{ form_data.email if form_data else '' }}" placeholder="e.g., patient@email.com">
+                <p style="font-size: 12px; color: #718096; margin-top: 5px;">Optional. If provided, patient will receive email reminders before appointments.</p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label for="nric">NRIC / Passport Number</label>
+                    <input type="text" id="nric" name="nric" value="{{ form_data.nric if form_data else '' }}" placeholder="e.g., 900101-01-1234">
+                </div>
+                
+                <div class="form-group" style="display: flex; align-items: center; padding-top: 30px;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="is_foreign" name="is_foreign" {{ 'checked' if form_data and form_data.get('is_foreign') else '' }} style="width: auto; margin-right: 10px;">
+                        <span>Foreign Patient</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 15px;">
+            <button type="submit" class="btn btn-success" style="flex: 1;" id="submitBtn" {{ 'disabled' if not available_slots else '' }}>Book Appointment</button>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Appointment type durations (minutes)
+const appointmentDurations = {
+    {% for key, info in appointment_types.items() %}
+    '{{ key }}': {{ info.duration }}{% if not loop.last %},{% endif %}
+    {% endfor %}
+};
+
+function getSelectedDuration() {
+    const typeSelect = document.getElementById('appointment_type');
+    const selectedOption = typeSelect.options[typeSelect.selectedIndex];
+    return parseInt(selectedOption.dataset.duration) || 30;
+}
+
+function selectSlot(btn) {
+    const startTime = btn.dataset.time;
+    const duration = getSelectedDuration();
+    const slotsNeeded = duration / 30; // 30-minute slots
+    
+    // Get all slot buttons in order
+    const allSlots = Array.from(document.querySelectorAll('.slot-btn'));
+    const startIndex = allSlots.indexOf(btn);
+    
+    // Clear previous selection
+    document.querySelectorAll('.slot-btn').forEach(b => {
+        b.classList.remove('selected', 'occupied-by-selection');
+        b.style.background = '';
+        b.style.color = '';
+        b.style.opacity = '1';
+    });
+    
+    // Check if we have enough consecutive slots
+    if (startIndex + slotsNeeded > allSlots.length) {
+        alert('Not enough time slots available for this appointment type. Please select an earlier time.');
+        return;
+    }
+    
+    // Check if any slot in the range is already booked (has disabled attribute or special class)
+    for (let i = startIndex; i < startIndex + slotsNeeded; i++) {
+        if (allSlots[i].disabled || allSlots[i].classList.contains('booked')) {
+            alert('This time slot and the following ' + (slotsNeeded - 1) + ' slots are needed, but some are already booked. Please select a different time.');
+            return;
+        }
+    }
+    
+    // Mark the selected slots
+    for (let i = startIndex; i < startIndex + slotsNeeded; i++) {
+        if (i === startIndex) {
+            // First slot - highlighted as selected
+            allSlots[i].classList.add('selected');
+            allSlots[i].style.background = '#4299e1';
+            allSlots[i].style.color = 'white';
+        } else {
+            // Following slots - marked as occupied by this selection
+            allSlots[i].classList.add('occupied-by-selection');
+            allSlots[i].style.background = '#bee3f8'; // Light blue
+            allSlots[i].style.color = '#2b6cb0';
+            allSlots[i].style.opacity = '0.8';
+        }
+    }
+    
+    // Set the hidden input value to start time
+    document.getElementById('start_time').value = startTime;
+    
+    // Show info about slots being occupied
+    const slotInfo = document.getElementById('slotInfo');
+    const slotCount = document.getElementById('slotCount');
+    slotCount.textContent = slotsNeeded + ' (' + duration + ' minutes total)';
+    slotInfo.style.display = 'block';
+}
+
+function updateSlotSelection() {
+    // If a slot is already selected, re-validate with new duration
+    const selectedSlot = document.querySelector('.slot-btn.selected');
+    if (selectedSlot) {
+        selectSlot(selectedSlot);
+    }
+}
+
+// Patient search autocomplete
+let searchTimeout;
+const patientSearch = document.getElementById('patient_search');
+const patientDropdown = document.getElementById('patient_dropdown');
+const patientIdInput = document.getElementById('patient_id');
+const patientNameInput = document.getElementById('patient_name');
+const phoneInput = document.getElementById('phone');
+const emailInput = document.getElementById('email');
+const nricInput = document.getElementById('nric');
+const isForeignCheckbox = document.getElementById('is_foreign');
+
+patientSearch.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value.trim();
+    
+    if (query.length < 2) {
+        patientDropdown.style.display = 'none';
+        return;
+    }
+    
+    searchTimeout = setTimeout(() => {
+        fetch('/api/patients/search?q=' + encodeURIComponent(query))
+            .then(response => response.json())
+            .then(data => {
+                if (data.patients && data.patients.length > 0) {
+                    let html = '';
+                    data.patients.forEach(p => {
+                        html += '<div class="patient-option" data-id="' + p.id + '" style="padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0; hover: background: #f7fafc;">' +
+                            '<div style="font-weight: 600; color: #2d3748;">' + p.name + '</div>' +
+                            '<div style="font-size: 13px; color: #718096;">' + p.phone + (p.nric ? ' | ' + p.nric : '') + '</div>' +
+                        '</div>';
+                    });
+                    patientDropdown.innerHTML = html;
+                    patientDropdown.style.display = 'block';
+                    
+                    // Add click handlers
+                    document.querySelectorAll('.patient-option').forEach(option => {
+                        option.addEventListener('click', function() {
+                            const patientId = this.dataset.id;
+                            loadPatientDetails(patientId);
+                            patientDropdown.style.display = 'none';
+                            patientSearch.value = this.querySelector('div').textContent;
+                        });
+                    });
+                } else {
+                    patientDropdown.innerHTML = '<div style="padding: 15px; color: #718096; text-align: center;">No patients found</div>';
+                    patientDropdown.style.display = 'block';
+                }
+            });
+    }, 300);
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    if (!patientSearch.contains(e.target) && !patientDropdown.contains(e.target)) {
+        patientDropdown.style.display = 'none';
+    }
+});
+
+function loadPatientDetails(patientId) {
+    fetch('/api/patient/' + patientId)
+        .then(response => response.json())
+        .then(p => {
+            patientIdInput.value = p.id;
+            patientNameInput.value = p.name;
+            phoneInput.value = p.phone;
+            emailInput.value = p.email || '';
+            nricInput.value = p.nric || '';
+            isForeignCheckbox.checked = p.is_foreign;
+            
+            // Make fields readonly to indicate they're from existing patient
+            patientNameInput.style.background = '#f7fafc';
+            phoneInput.style.background = '#f7fafc';
+            emailInput.style.background = '#f7fafc';
+        });
+}
+
+// Clear patient ID when manually editing name or phone (new patient)
+patientNameInput.addEventListener('input', function() {
+    patientIdInput.value = '';
+    this.style.background = '';
+    phoneInput.style.background = '';
+    emailInput.style.background = '';
+});
+
+phoneInput.addEventListener('input', function() {
+    patientIdInput.value = '';
+    this.style.background = '';
+    patientNameInput.style.background = '';
+    emailInput.style.background = '';
+});
+
+emailInput.addEventListener('input', function() {
+    patientIdInput.value = '';
+    this.style.background = '';
+});
+
+// Auto-refresh slots when date changes
+document.getElementById('appointment_date').addEventListener('change', function() {
+    const date = new Date(this.value);
+    const dayOfWeek = date.getDay();
+    
+    // Check if Monday (day 1 in JavaScript getDay() where 0=Sunday, 1=Monday)
+    // Actually, getDay(): 0=Sunday, 1=Monday, 2=Tuesday, etc.
+    if (dayOfWeek === 1) {
+        alert('Clinic is closed on Mondays. Please select another day.');
+        // Reset to today or next available day
+        const today = new Date();
+        if (today.getDay() === 1) {
+            today.setDate(today.getDate() + 1); // Move to Tuesday if today is Monday
+        }
+        this.value = today.toISOString().split('T')[0];
+        return;
+    }
+    
+    window.location.href = "{{ url_for('book_appointment') }}?date=" + this.value;
+});
+
+// Set min date and block Mondays in the date picker
+document.addEventListener('DOMContentLoaded', function() {
+    const dateInput = document.getElementById('appointment_date');
+    const today = new Date();
+    
+    // If today is Monday, set min to Tuesday
+    if (today.getDay() === 1) {
+        today.setDate(today.getDate() + 1);
+    }
+    
+    dateInput.setAttribute('min', today.toISOString().split('T')[0]);
+});
+
+// Validate form before submit
+document.getElementById('bookingForm').addEventListener('submit', function(e) {
+    const time = document.getElementById('start_time').value;
+    if (!time) {
+        e.preventDefault();
+        alert('Please select a time slot');
+        return false;
+    }
+});
+</script>
+{% endblock %}

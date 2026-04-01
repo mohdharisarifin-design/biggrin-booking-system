@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}My Schedule - Dental Clinic{% endblock %}
+
+{% block content %}
+<h1>My Schedule</h1>
+
+<div class="date-nav">
+    <a href="{{ url_for('doctor_schedule') }}?date={{ prev_date.strftime('%Y-%m-%d') }}" class="btn btn-secondary">← Previous Day</a>
+    <h2>{{ selected_date.strftime('%A, %d %B %Y') }}</h2>
+    <a href="{{ url_for('doctor_schedule') }}?date={{ next_date.strftime('%Y-%m-%d') }}" class="btn btn-secondary">Next Day →</a>
+</div>
+
+<div class="card">
+    <form method="GET" style="margin-bottom: 20px;">
+        <label style="margin-bottom: 8px; display: block;">Jump to Date:</label>
+        <input type="date" name="date" value="{{ selected_date.strftime('%Y-%m-%d') }}" onchange="this.form.submit()" style="width: auto;">
+    </form>
+</div>
+
+<div class="card">
+    <h3>Appointments for {{ selected_date.strftime('%A, %d %B %Y') }}</h3>
+    
+    {% if appointments %}
+    <div style="margin-top: 20px;">
+        {% for appt in appointments %}
+        <div class="time-block occupied">
+            <div class="time">
+                {{ appt.start_time.strftime('%H:%M') }}<br>
+                <small style="color: #718096;">{{ appt.end_time.strftime('%H:%M') }}</small>
+            </div>
+            <div class="patient-info">
+                <div class="name">{{ appt.patient.name }}</div>
+                <div class="type">{{ appointment_types[appt.appointment_type].name }} | {{ appt.patient.phone }}</div>
+                {% if appt.notes %}
+                <div style="font-size: 13px; color: #e53e3e; margin-top: 5px;">
+                    <strong>Note:</strong> {{ appt.notes }}
+                </div>
+                {% endif %}
+            </div>
+            <div>
+                <span class="badge badge-{{ appt.status }}">{{ appt.status.title() }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #a0aec0;">
+        <p style="font-size: 18px; margin-bottom: 10px;">No appointments scheduled</p>
+        <p style="font-size: 14px;">You have a free day! 🎉</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h4>Clinic Hours</h4>
+    <p style="margin-top: 10px; color: #718096;">
+        {% set day = selected_date.weekday() %}
+        {% if day == 0 %}
+            <strong style="color: #e53e3e;">Monday - Closed</strong>
+        {% elif day in [1, 2, 3, 4] %}
+            Tuesday - Friday: <strong>9:00 AM - 5:00 PM</strong>
+        {% else %}
+            Saturday - Sunday: <strong>9:00 AM - 1:30 PM</strong>
+        {% endif %}
+    </p>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h4>Quick Tips</h4>
+    <ul style="margin-top: 10px; margin-left: 20px; color: #718096; line-height: 1.8;">
+        <li>Scaling appointments: 30 minutes</li>
+        <li>Extractions: 90 minutes (1.5 hours)</li>
+        <li>Root canal/Crown: 120 minutes (2 hours)</li>
+    </ul>
+</div>
+{% endblock %}

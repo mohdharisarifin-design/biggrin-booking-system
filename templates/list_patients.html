@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Patients - Dental Clinic{% endblock %}
+
+{% block content %}
+<h1>Patient Directory</h1>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0;">Patient Directory</h3>
+        <a href="{{ url_for('add_patient') }}" class="btn btn-success">+ Add New Patient</a>
+    </div>
+    
+    <form method="GET" class="search-box">
+        <input type="text" name="search" placeholder="Search by name or phone number..." value="{{ search }}">
+        <button type="submit" class="btn btn-primary">Search</button>
+        {% if search %}
+        <a href="{{ url_for('list_patients') }}" class="btn btn-secondary">Clear</a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="card">
+    {% if patients %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>NRIC/Passport</th>
+                <th>Address</th>
+                <th>Registered</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for patient in patients %}
+            <tr>
+                <td>
+                    <a href="{{ url_for('patient_detail', id=patient.id) }}" style="color: #667eea; text-decoration: none; font-weight: 600;">
+                        {{ patient.name }}
+                    </a>
+                    {% if not patient.nric or not patient.address %}
+                    <span class="badge" style="background: #fed7d7; color: #742a2a; font-size: 10px; margin-left: 8px;">Incomplete</span>
+                    {% endif %}
+                </td>
+                <td>{{ patient.phone }}</td>
+                <td>
+                    {% if patient.nric %}
+                    {{ patient.nric }}
+                    {% if patient.is_foreign %}
+                    <span class="badge" style="background: #fed7d7; color: #742a2a;">Foreign</span>
+                    {% endif %}
+                    {% else %}
+                    <span style="color: #a0aec0;">Not registered yet</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if patient.address %}
+                    <span style="font-size: 14px;">{{ patient.address[:50] }}{% if patient.address|length > 50 %}...{% endif %}</span>
+                    {% else %}
+                    <span style="color: #a0aec0;">-</span>
+                    {% endif %}
+                </td>
+                <td>{{ patient.registered_at.strftime('%d %b %Y') }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('delete_patient', id=patient.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete {{ patient.name }}? This will cancel all their appointments.');">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #a0aec0;">
+        <p style="font-size: 18px;">No patients found</p>
+        {% if search %}
+        <p>Try a different search term</p>
+        {% else %}
+        <p>Patient records will appear here when appointments are booked</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

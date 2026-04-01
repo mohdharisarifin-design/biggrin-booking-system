@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Patient Registration - Dental Clinic{% endblock %}
+
+{% block content %}
+<h1>Patient Registration</h1>
+<p style="color: #718096; margin-bottom: 20px;">Complete registration for walk-in patient</p>
+
+<div class="card">
+    <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+        <h4 style="margin-bottom: 15px;">Current Information</h4>
+        <p><strong>Name:</strong> {{ patient.name }}</p>
+        <p><strong>Phone:</strong> {{ patient.phone }}</p>
+    </div>
+    
+    <form method="POST" id="registrationForm">
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+            <div class="form-group">
+                <label for="name">Full Name *</label>
+                <input type="text" id="name" name="name" value="{{ patient.name }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="phone">Phone Number *</label>
+                <input type="tel" id="phone" name="phone" value="{{ patient.phone }}" required>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="email">Email (for appointment reminders)</label>
+            <input type="email" id="email" name="email" value="{{ patient.email or '' }}" placeholder="e.g., patient@email.com">
+            <p style="font-size: 12px; color: #718096; margin-top: 5px;">Optional. Patient will receive email reminders before appointments.</p>
+        </div>
+        
+        <div class="form-group">
+            <label for="address">Address *</label>
+            <textarea id="address" name="address" required placeholder="Full residential address...">{{ patient.address or '' }}</textarea>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+            <div class="form-group">
+                <label for="nric">NRIC / Passport Number *</label>
+                <input type="text" id="nric" name="nric" value="{{ patient.nric or '' }}" required placeholder="e.g., 900101-01-1234 or passport number">
+            </div>
+            
+            <div class="form-group" style="display: flex; align-items: center; padding-top: 30px;">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" name="is_foreign" {{ 'checked' if patient.is_foreign else '' }} style="width: auto; margin-right: 10px;">
+                    <span>Foreign Patient (Passport)</span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>Patient Signature</label>
+            <p style="font-size: 14px; color: #718096; margin-bottom: 10px;">Please sign below:</p>
+            <canvas id="signaturePad" width="600" height="200" style="border: 2px solid #e2e8f0; border-radius: 8px; background: white; cursor: crosshair; max-width: 100%;"></canvas>
+            <input type="hidden" id="signatureData" name="signature_data">
+            <div style="margin-top: 10px;">
+                <button type="button" onclick="clearSignature()" class="btn btn-sm btn-secondary">Clear Signature</button>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 15px; margin-top: 30px;">
+            <button type="submit" class="btn btn-success" style="flex: 1;">Complete Registration</button>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const canvas = document.getElementById('signaturePad');
+const ctx = canvas.getContext('2d');
+let isDrawing = false;
+let lastX = 0;
+let lastY = 0;
+
+// Set up canvas
+ctx.strokeStyle = '#000';
+ctx.lineWidth = 2;
+ctx.lineCap = 'round';
+
+function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX || e.touches[0].clientX) - rect.left;
+    const y = (e.clientY || e.touches[0].clientY) - rect.top;
+    return { x, y };
+}
+
+function startDrawing(e) {
+    isDrawing = true;
+    const pos = getPos(e);
+    lastX = pos.x;
+    lastY = pos.y;
+}
+
+function draw(e) {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    lastX = pos.x;
+    lastY = pos.y;
+}
+
+function stopDrawing() {
+    isDrawing = false;
+    // Save signature to hidden input
+    document.getElementById('signatureData').value = canvas.toDataURL();
+}
+
+function clearSignature() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    document.getElementById('signatureData').value = '';
+}
+
+// Mouse events
+canvas.addEventListener('mousedown', startDrawing);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', stopDrawing);
+canvas.addEventListener('mouseout', stopDrawing);
+
+// Touch events
+canvas.addEventListener('touchstart', startDrawing);
+canvas.addEventListener('touchmove', draw);
+canvas.addEventListener('touchend', stopDrawing);
+
+// Form validation
+document.getElementById('registrationForm').addEventListener('submit', function(e) {
+    if (!document.getElementById('signatureData').value) {
+        e.preventDefault();
+        alert('Please provide a signature');
+        return false;
+    }
+});
+</script>
+{% endblock %}
