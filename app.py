@@ -52,23 +52,25 @@ class Appointment(db.Model):
     appointment_date = db.Column(db.Date, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
-    appointment_type = db.Column(db.String(50), nullable=False)  # 'scaling', 'extraction', 'consultation', 'other'
-    status = db.Column(db.String(20), default='scheduled')  # scheduled, completed, cancelled
+    appointment_type = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(20), default='scheduled')  # 'scheduled', 'completed', 'cancelled'
     notes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.now)
+    fee = db.Column(db.Integer, nullable=True)  # Fee in RM
+    payment_status = db.Column(db.String(20), default='pending')  # 'pending', 'paid', 'refunded'
+    payment_method = db.Column(db.String(50), nullable=True)  # 'cash', 'card', 'online'
     
     patient = db.relationship('Patient', backref='appointments')
 
 # ========== APPOINTMENT TYPES & DURATIONS ==========
 
 APPOINTMENT_TYPES = {
-    'scaling': {'name': 'Scaling & Cleaning', 'duration': 30},
-    'consultation': {'name': 'Consultation Only', 'duration': 30},
-    'extraction': {'name': 'Tooth Extraction', 'duration': 90},  # 1.5 hours
-    'filling': {'name': 'Filling', 'duration': 60},
-    'root_canal': {'name': 'Root Canal', 'duration': 120},
-    'crown': {'name': 'Crown Procedure', 'duration': 120},
-    'other': {'name': 'Other Procedure', 'duration': 60}
+    'scaling': {'name': 'Scaling & Cleaning', 'duration': 30, 'fee': 150},
+    'consultation': {'name': 'Consultation Only', 'duration': 30, 'fee': 50},
+    'extraction': {'name': 'Tooth Extraction', 'duration': 90, 'fee': 300},  # 1.5 hours
+    'filling': {'name': 'Filling', 'duration': 60, 'fee': 200},
+    'root_canal': {'name': 'Root Canal', 'duration': 120, 'fee': 800},
+    'crown': {'name': 'Crown Procedure', 'duration': 120, 'fee': 1200},
+    'other': {'name': 'Other Procedure', 'duration': 60, 'fee': 150}
 }
 
 CLINIC_HOURS = {
@@ -96,6 +98,34 @@ def init_db():
             db.session.execute(text("ALTER TABLE patient ADD COLUMN email VARCHAR(120)"))
             db.session.commit()
             print("[DB MIGRATION] Added 'email' column to patient table")
+        
+        # Migrate: Add new columns to Appointment table
+        try:
+            from sqlalchemy import text
+            db.session.execute(text("SELECT fee FROM appointment LIMIT 1"))
+        except Exception:
+            # fee column doesn't exist, add it
+            db.session.execute(text("ALTER TABLE appointment ADD COLUMN fee INTEGER"))
+            db.session.commit()
+            print("[DB MIGRATION] Added 'fee' column to appointment table")
+        
+        try:
+            from sqlalchemy import text
+            db.session.execute(text("SELECT payment_status FROM appointment LIMIT 1"))
+        except Exception:
+            # payment_status column doesn't exist, add it
+            db.session.execute(text("ALTER TABLE appointment ADD COLUMN payment_status VARCHAR(20) DEFAULT 'pending'"))
+            db.session.commit()
+            print("[DB MIGRATION] Added 'payment_status' column to appointment table")
+        
+        try:
+            from sqlalchemy import text
+            db.session.execute(text("SELECT payment_method FROM appointment LIMIT 1"))
+        except Exception:
+            # payment_method column doesn't exist, add it
+            db.session.execute(text("ALTER TABLE appointment ADD COLUMN payment_method VARCHAR(50)"))
+            db.session.commit()
+            print("[DB MIGRATION] Added 'payment_method' column to appointment table")
         
         # Create default users if they don't exist
         if not User.query.filter_by(username='admin').first():
@@ -255,30 +285,42 @@ def admin_dashboard():
     # Get total patients
     total_patients = Patient.query.count()
     
+    # Get income for today
+    today_income = db.session.query(db.func.sum(Appointment.fee)).filter(
+        Appointment.appointment_date == today,
+        Appointment.status != 'cancelled',
+        Appointment.payment_status == 'paid'
+    ).scalar() or 0
+    
+    # Get pending payments for today
+    today_pending = db.session.query(db.func.sum(Appointment.fee)).filter(
+        Appointment.appointment_date == today,
+        Appointment.status != 'cancelled',
+        Appointment.payment_status == 'pending'
+    ).scalar() or 0
+    
     # Get patient growth over time (last 6 months)
-    from sqlalchemy import func
+    from collections import defaultdict
     end_date = today
     start_date = end_date - timedelta(days=180)  # 6 months ago
     
-    patient_growth = db.session.query(
-        func.date(Patient.registered_at).label('date'),
-        func.count(Patient.id).label('count')
-    ).filter(
+    # Get patients registered in last 6 months
+    recent_patients = Patient.query.filter(
         Patient.registered_at >= start_date
-    ).group_by(
-        func.date(Patient.registered_at)
-    ).order_by(
-        func.date(Patient.registered_at)
-    ).all()
+    ).order_by(Patient.registered_at).all()
     
-    # Prepare data for chart
-    growth_dates = []
+    # Group by date
+    daily_counts = defaultdict(int)
+    for patient in recent_patients:
+        date_key = patient.registered_at.strftime('%d %b')
+        daily_counts[date_key] += 1
+    
+    # Prepare data for chart (cumulative)
+    growth_dates = sorted(daily_counts.keys())
     growth_counts = []
     cumulative_count = 0
-    
-    for row in patient_growth:
-        growth_dates.append(row.date.strftime('%d %b'))
-        cumulative_count += row.count
+    for date in growth_dates:
+        cumulative_count += daily_counts[date]
         growth_counts.append(cumulative_count)
     
     return render_template('admin_dashboard.html', 
@@ -288,7 +330,9 @@ def admin_dashboard():
                          today=today,
                          appointment_types=APPOINTMENT_TYPES,
                          growth_dates=growth_dates,
-                         growth_counts=growth_counts)
+                         growth_counts=growth_counts,
+                         today_income=today_income,
+                         today_pending=today_pending)
 
 @app.route('/admin/book', methods=['GET', 'POST'])
 def book_appointment():
@@ -367,14 +411,16 @@ def book_appointment():
                     patient.nric = nric
                 patient.is_foreign = is_foreign
         
-        # Create appointment
+        # Create appointment with fee
+        fee = APPOINTMENT_TYPES[appointment_type]['fee']
         appointment = Appointment(
             patient_id=patient.id,
             appointment_date=appointment_date,
             start_time=start_time,
             end_time=end_time,
             appointment_type=appointment_type,
-            notes=notes
+            notes=notes,
+            fee=fee
         )
         db.session.add(appointment)
         db.session.commit()
@@ -414,6 +460,54 @@ def view_appointments():
                          start_date=start_date,
                          end_date=end_date,
                          appointment_types=APPOINTMENT_TYPES)
+
+@app.route('/admin/income')
+def income_report():
+    """Income report page."""
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+    
+    # Get date range from query params or default to current month
+    start_date_str = request.args.get('start_date', datetime.now().strftime('%Y-%m-%d'))
+    end_date_str = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
+    
+    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    
+    # Get appointments in date range
+    appointments = Appointment.query.filter(
+        Appointment.appointment_date >= start_date,
+        Appointment.appointment_date <= end_date
+    ).filter(Appointment.status != 'cancelled').all()
+    
+    # Calculate income stats
+    total_expected = sum(appt.fee or APPOINTMENT_TYPES[appt.appointment_type]['fee'] for appt in appointments)
+    total_collected = sum(appt.fee or 0 for appt in appointments if appt.payment_status == 'paid')
+    total_pending = sum(appt.fee or 0 for appt in appointments if appt.payment_status == 'pending')
+    
+    return render_template('income_report.html',
+                         appointments=appointments,
+                         start_date=start_date,
+                         end_date=end_date,
+                         total_expected=total_expected,
+                         total_collected=total_collected,
+                         total_pending=total_pending,
+                         appointment_types=APPOINTMENT_TYPES)
+
+@app.route('/admin/appointment/<int:id>/payment', methods=['POST'])
+def update_payment(id):
+    """Update payment status for an appointment."""
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+    
+    appointment = Appointment.query.get_or_404(id)
+    
+    appointment.payment_status = request.form.get('payment_status', 'pending')
+    appointment.payment_method = request.form.get('payment_method', None)
+    db.session.commit()
+    
+    flash('Payment status updated', 'success')
+    return redirect(request.referrer or url_for('income_report'))
 
 @app.route('/admin/appointment/<int:id>/cancel', methods=['POST'])
 def cancel_appointment(id):

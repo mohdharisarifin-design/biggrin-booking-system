@@ -21,6 +21,14 @@
         <h3>Total Patients</h3>
         <div class="number">{{ total_patients }}</div>
     </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #2d8a4e 0%, #1e6b38 100%);">
+        <h3>Today's Income</h3>
+        <div class="number">RM {{ today_income }}</div>
+        {% if today_pending > 0 %}
+        <p style="font-size: 12px; margin-top: 5px; opacity: 0.9;">RM {{ today_pending }} pending</p>
+        {% endif %}
+    </div>
 </div>
 
 <div class="card" style="margin-top: 30px;">
@@ -132,7 +140,21 @@
             <a href="{{ url_for('add_patient') }}" class="btn btn-success">Add New Patient</a>
             <a href="{{ url_for('view_appointments') }}" class="btn btn-secondary">View All Appointments</a>
             <a href="{{ url_for('list_patients') }}" class="btn btn-secondary">Patient Directory</a>
+            <a href="{{ url_for('income_report') }}" class="btn btn-secondary">Income Report</a>
         </div>
+    </div>
+    
+    <div class="card">
+        <h3>Patient Growth (Last 6 Months)</h3>
+        {% if growth_dates and growth_counts %}
+        <div style="margin-top: 15px; height: 200px; position: relative;">
+            <canvas id="patientGrowthChart" style="width: 100%; height: 100%;"></canvas>
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 40px; color: #a0aec0;">
+            <p>No patient registration data available yet</p>
+        </div>
+        {% endif %}
     </div>
     
     <div class="card">
@@ -339,5 +361,64 @@ function confirmReschedule() {
         alert('Error rescheduling appointment');
     });
 }
+
+// Patient Growth Chart
+{% if growth_dates and growth_counts %}
+document.addEventListener('DOMContentLoaded', function() {
+    const canvas = document.getElementById('patientGrowthChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const dates = {{ growth_dates|tojson }};
+    const counts = {{ growth_counts|tojson }};
+    
+    // Set canvas size
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    
+    const padding = 40;
+    const chartWidth = canvas.width - padding * 2;
+    const chartHeight = canvas.height - padding * 2;
+    
+    const maxCount = Math.max(...counts, 1);
+    const barWidth = Math.min(chartWidth / dates.length * 0.6, 40);
+    const spacing = chartWidth / dates.length;
+    
+    // Draw axes
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding, padding);
+    ctx.lineTo(padding, canvas.height - padding);
+    ctx.lineTo(canvas.width - padding, canvas.height - padding);
+    ctx.stroke();
+    
+    // Draw bars
+    counts.forEach((count, i) => {
+        const x = padding + (i + 0.5) * spacing - barWidth / 2;
+        const barHeight = (count / maxCount) * chartHeight * 0.8;
+        const y = canvas.height - padding - barHeight;
+        
+        // Bar
+        ctx.fillStyle = '#2d8a4e';
+        ctx.fillRect(x, y, barWidth, barHeight);
+        
+        // Value label
+        ctx.fillStyle = '#2d3748';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(count, x + barWidth / 2, y - 5);
+        
+        // Date label
+        ctx.fillStyle = '#718096';
+        ctx.font = '10px sans-serif';
+        ctx.save();
+        ctx.translate(x + barWidth / 2, canvas.height - padding + 15);
+        ctx.rotate(-Math.PI / 4);
+        ctx.fillText(dates[i], 0, 0);
+        ctx.restore();
+    });
+});
+{% endif %}
 </script>
 {% endblock %}

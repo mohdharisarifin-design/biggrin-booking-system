@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Income Report - Dental Clinic{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Income Report</h1>
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">← Back to Dashboard</a>
+</div>
+
+<div class="card">
+    <form method="GET" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+            <label for="start_date">From</label>
+            <input type="date" id="start_date" name="start_date" value="{{ start_date.strftime('%Y-%m-%d') }}">
+        </div>
+        
+        <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+            <label for="end_date">To</label>
+            <input type="date" id="end_date" name="end_date" value="{{ end_date.strftime('%Y-%m-%d') }}">
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{{ url_for('income_report') }}" class="btn btn-secondary">Reset</a>
+        </div>
+    </form>
+</div>
+
+<div class="grid" style="margin-top: 20px;">
+    <div class="stat-card" style="background: linear-gradient(135deg, #2d8a4e 0%, #1e6b38 100%);">
+        <h3>Total Collected</h3>
+        <div class="number">RM {{ total_collected }}</div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);">
+        <h3>Total Expected</h3>
+        <div class="number">RM {{ total_expected }}</div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #718096 0%, #4a5568 100%);">
+        <h3>Pending Payment</h3>
+        <div class="number">RM {{ total_pending }}</div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h3>Appointments & Payments</h3>
+    
+    {% if appointments %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Patient</th>
+                <th>Type</th>
+                <th>Fee</th>
+                <th>Payment Status</th>
+                <th>Method</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for appt in appointments %}
+            <tr>
+                <td>{{ appt.appointment_date.strftime('%d %b %Y') }}</td>
+                <td><strong>{{ appt.patient.name }}</strong></td>
+                <td>{{ appointment_types[appt.appointment_type].name }}</td>
+                <td>RM {{ appt.fee or appointment_types[appt.appointment_type].fee }}</td>
+                <td>
+                    {% if appt.payment_status == 'paid' %}
+                    <span class="badge" style="background: #c6f6d5; color: #22543d;">Paid</span>
+                    {% elif appt.payment_status == 'pending' %}
+                    <span class="badge" style="background: #fed7d7; color: #742a2a;">Pending</span>
+                    {% else %}
+                    <span class="badge" style="background: #e2e8f0; color: #4a5568;">{{ appt.payment_status.title() }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ appt.payment_method or '-' }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('update_payment', id=appt.id) }}" style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <select name="payment_status" class="form-select" style="width: auto; padding: 6px;">
+                            <option value="pending" {{ 'selected' if appt.payment_status == 'pending' else '' }}>Pending</option>
+                            <option value="paid" {{ 'selected' if appt.payment_status == 'paid' else '' }}>Paid</option>
+                        </select>
+                        <select name="payment_method" class="form-select" style="width: auto; padding: 6px;">
+                            <option value="">- Method -</option>
+                            <option value="cash" {{ 'selected' if appt.payment_method == 'cash' else '' }}>Cash</option>
+                            <option value="card" {{ 'selected' if appt.payment_method == 'card' else '' }}>Card</option>
+                            <option value="online" {{ 'selected' if appt.payment_method == 'online' else '' }}>Online</option>
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-success">Update</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #a0aec0;">
+        <p>No appointments found in this date range</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
