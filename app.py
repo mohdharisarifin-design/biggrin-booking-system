@@ -15,7 +15,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# ========== DATABASE MODELS ========== test
+# ========== DATABASE MODELS ==========
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
