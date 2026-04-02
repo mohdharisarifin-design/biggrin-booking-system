@@ -432,12 +432,13 @@
             <img src="/static/logo.png" alt="Big Grin Dental Clinic">
         </a>
         <div class="navbar-nav">
+            <a href="{{ url_for('admin_dashboard') if session.get('role') == 'admin' else url_for('doctor_schedule') }}">Home</a>
             {% if session.get('role') == 'admin' %}
             <a href="{{ url_for('book_appointment') }}">Book Appointment</a>
-            <a href="{{ url_for('view_appointments') }}">Appointments</a>
             <a href="{{ url_for('list_patients') }}">Patients</a>
             {% else %}
             <a href="{{ url_for('doctor_schedule') }}">My Schedule</a>
+            <a href="{{ url_for('view_appointments') }}">Appointments</a>
             {% endif %}
             <a href="{{ url_for('financial_report') }}">Financial Report</a>
             <span class="user-info">{{ session.get('name') }} ({{ session.get('role') }})</span>
