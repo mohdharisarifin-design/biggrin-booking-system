@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Upload Patients - Dental Clinic{% endblock %}
+
+{% block content %}
+<h1>Bulk Upload Patients</h1>
+<p style="color: #718096; margin-bottom: 20px;">Upload multiple patients at once using a CSV file</p>
+
+<div class="card" style="max-width: 800px;">
+    <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+        <h4 style="margin-bottom: 15px;">CSV File Format</h4>
+        <p style="font-size: 14px; color: #4a5568; margin-bottom: 10px;">Your CSV file should have the following columns:</p>
+        <code style="display: block; background: #edf2f7; padding: 10px; border-radius: 4px; font-size: 13px; margin-bottom: 15px;">
+            name,phone,email,nric,address,is_foreign,pdpa_consent
+        </code>
+        <ul style="font-size: 13px; color: #718096; margin-left: 20px;">
+            <li><strong>name</strong> - Patient's full name (required)</li>
+            <li><strong>phone</strong> - Phone number (required)</li>
+            <li><strong>email</strong> - Email address (optional)</li>
+            <li><strong>nric</strong> - NRIC or Passport number (optional)</li>
+            <li><strong>address</strong> - Full address (optional)</li>
+            <li><strong>is_foreign</strong> - 1 for foreign patient, 0 for local (default: 0)</li>
+            <li><strong>pdpa_consent</strong> - 1 if consented, 0 if not (default: 0)</li>
+        </ul>
+        <a href="{{ url_for('download_csv_template') }}" class="btn btn-sm btn-secondary" style="margin-top: 10px;">
+            Download Sample CSV Template
+        </a>
+    </div>
+    
+    <form method="POST" enctype="multipart/form-data" id="bulkUploadForm">
+        <div class="form-group">
+            <label for="csv_file">Upload CSV File *</label>
+            <input type="file" id="csv_file" name="csv_file" accept=".csv" required 
+                   style="padding: 10px; border: 2px dashed #e2e8f0; border-radius: 8px; width: 100%;">
+            <p style="font-size: 12px; color: #718096; margin-top: 5px;">Only .csv files are accepted. Maximum file size: 5MB</p>
+        </div>
+        
+        <div style="display: flex; gap: 15px; margin-top: 30px;">
+            <button type="submit" class="btn btn-success" style="flex: 1;">Upload & Process</button>
+            <a href="{{ url_for('list_patients') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+{% if results %}
+<div class="card" style="max-width: 800px; margin-top: 20px;">
+    <h3 style="margin-bottom: 15px;">Upload Results</h3>
+    
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
+        <div style="background: #c6f6d5; padding: 15px; border-radius: 8px; text-align: center;">
+            <p style="font-size: 24px; font-weight: bold; color: #22543d;">{{ results.success }}</p>
+            <p style="font-size: 14px; color: #22543d;">Successfully Added</p>
+        </div>
+        <div style="background: #fed7d7; padding: 15px; border-radius: 8px; text-align: center;">
+            <p style="font-size: 24px; font-weight: bold; color: #742a2a;">{{ results.errors|length }}</p>
+            <p style="font-size: 14px; color: #742a2a;">Errors</p>
+        </div>
+        <div style="background: #e2e8f0; padding: 15px; border-radius: 8px; text-align: center;">
+            <p style="font-size: 24px; font-weight: bold; color: #4a5568;">{{ results.total }}</p>
+            <p style="font-size: 14px; color: #4a5568;">Total Rows</p>
+        </div>
+    </div>
+    
+    {% if results.errors %}
+    <div style="margin-top: 20px;">
+        <h4 style="color: #742a2a; margin-bottom: 10px;">Error Details</h4>
+        <div style="max-height: 300px; overflow-y: auto; background: #fff5f5; border: 1px solid #fed7d7; border-radius: 8px; padding: 15px;">
+            <table style="width: 100%; font-size: 13px;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid #fc8181;">Row</th>
+                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid #fc8181;">Name</th>
+                        <th style="text-align: left; padding: 8px; border-bottom: 1px solid #fc8181;">Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for error in results.errors %}
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #fee;">{{ error.row }}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #fee;">{{ error.name }}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #fee; color: #742a2a;">{{ error.message }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if results.success > 0 %}
+    <div style="margin-top: 20px; text-align: center;">
+        <a href="{{ url_for('list_patients') }}" class="btn btn-primary">View All Patients</a>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

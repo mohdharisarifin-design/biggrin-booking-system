@@ -67,6 +67,14 @@
             </div>
         </div>
         
+        <div class="form-group" style="margin-top: 20px; padding: 15px; background: #f0f7f2; border-radius: 8px; border: 1px solid #c6f6d5;">
+            <label style="display: flex; align-items: flex-start; cursor: pointer; margin-bottom: 10px;">
+                <input type="checkbox" name="pdpa_consent" id="pdpa_consent" {{ 'checked' if patient.pdpa_consent else '' }} required style="width: auto; margin-right: 10px; margin-top: 3px;">
+                <span style="font-weight: 600;">I consent to the collection and use of my personal data in accordance with the Personal Data Protection Act (PDPA).</span>
+            </label>
+            <p style="font-size: 12px; color: #718096; margin-left: 24px;">By checking this box, you agree that this clinic may collect, use, and disclose your personal information for the purpose of providing dental services and appointment reminders.</p>
+        </div>
+        
         <div style="display: flex; gap: 15px; margin-top: 30px;">
             <button type="submit" class="btn btn-success" style="flex: 1;">Complete Registration</button>
             <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Cancel</a>
@@ -149,10 +157,16 @@ window.addEventListener('load', function() {
     }
 });
 {% endif %}
+// Validate PDPA consent on submit
 document.getElementById('registrationForm').addEventListener('submit', function(e) {
     if (!document.getElementById('signatureData').value) {
         e.preventDefault();
         alert('Please provide a signature');
+        return false;
+    }
+    if (!document.getElementById('pdpa_consent').checked) {
+        e.preventDefault();
+        alert('Please provide PDPA consent to continue');
         return false;
     }
 });

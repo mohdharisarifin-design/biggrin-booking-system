@@ -747,6 +747,11 @@ def register_patient(id):
         patient.is_foreign = request.form.get('is_foreign') == 'on'
         patient.signature = request.form.get('signature_data', '')
         
+        # Handle PDPA consent
+        patient.pdpa_consent = request.form.get('pdpa_consent') == 'on'
+        if patient.pdpa_consent and not patient.pdpa_consent_date:
+            patient.pdpa_consent_date = datetime.now()
+        
         db.session.commit()
         flash('Patient registration completed', 'success')
         return redirect(url_for('admin_dashboard'))
@@ -814,6 +819,129 @@ def add_patient():
         return redirect(url_for('list_patients'))
     
     return render_template('add_patient.html')
+
+@app.route('/admin/patients/bulk-upload', methods=['GET', 'POST'])
+def bulk_upload_patients():
+    """Bulk upload patients from CSV file."""
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+    
+    results = None
+    
+    if request.method == 'POST':
+        if 'csv_file' not in request.files:
+            flash('No file selected', 'error')
+            return redirect(request.url)
+        
+        file = request.files['csv_file']
+        if file.filename == '':
+            flash('No file selected', 'error')
+            return redirect(request.url)
+        
+        if not file.filename.endswith('.csv'):
+            flash('Please upload a CSV file', 'error')
+            return redirect(request.url)
+        
+        import csv
+        import io
+        
+        stream = io.StringIO(file.stream.read().decode("UTF-8"), newline=None)
+        csv_reader = csv.DictReader(stream)
+        
+        success_count = 0
+        errors = []
+        row_num = 1  # Start at 1 to account for header
+        
+        for row in csv_reader:
+            row_num += 1
+            
+            try:
+                name = row.get('name', '').strip()
+                phone = row.get('phone', '').strip()
+                email = row.get('email', '').strip() or None
+                nric = row.get('nric', '').strip() or None
+                address = row.get('address', '').strip() or None
+                is_foreign = row.get('is_foreign', '0').strip() in ['1', 'true', 'True', 'yes', 'Yes']
+                pdpa_consent = row.get('pdpa_consent', '0').strip() in ['1', 'true', 'True', 'yes', 'Yes']
+                
+                # Validation
+                if not name:
+                    errors.append({'row': row_num, 'name': name or '(empty)', 'message': 'Name is required'})
+                    continue
+                
+                if not phone:
+                    errors.append({'row': row_num, 'name': name, 'message': 'Phone is required'})
+                    continue
+                
+                # Check for duplicates
+                existing = Patient.query.filter_by(phone=phone).first()
+                if existing:
+                    errors.append({'row': row_num, 'name': name, 'message': f'Phone {phone} already exists for patient: {existing.name}'})
+                    continue
+                
+                # Create patient
+                patient = Patient(
+                    name=name,
+                    phone=phone,
+                    email=email,
+                    nric=nric,
+                    address=address,
+                    is_foreign=is_foreign,
+                    pdpa_consent=pdpa_consent,
+                    pdpa_consent_date=datetime.now() if pdpa_consent else None
+                )
+                db.session.add(patient)
+                success_count += 1
+                
+            except Exception as e:
+                errors.append({'row': row_num, 'name': row.get('name', '(unknown)'), 'message': str(e)})
+        
+        # Commit all successful entries
+        if success_count > 0:
+            db.session.commit()
+        
+        results = {
+            'total': row_num - 1,
+            'success': success_count,
+            'errors': errors
+        }
+        
+        if success_count > 0:
+            flash(f'Successfully added {success_count} patient(s)', 'success')
+        if errors:
+            flash(f'{len(errors)} row(s) had errors', 'error')
+    
+    return render_template('bulk_upload_patients.html', results=results)
+
+@app.route('/admin/patients/download-template')
+def download_csv_template():
+    """Download CSV template for bulk patient upload."""
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+    
+    import csv
+    import io
+    from flask import Response
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow(['name', 'phone', 'email', 'nric', 'address', 'is_foreign', 'pdpa_consent'])
+    
+    # Sample rows
+    writer.writerow(['John Doe', '0123456789', 'john@email.com', '900101011234', 'Kuala Lumpur', '0', '1'])
+    writer.writerow(['Jane Smith', '0198765432', 'jane@email.com', 'A12345678', 'Petaling Jaya', '1', '1'])
+    writer.writerow(['Ahmad Abdullah', '0176543210', '', '880505101234', 'Shah Alam', '0', '1'])
+    
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': 'attachment; filename=patient_upload_template.csv'
+        }
+    )
 
 @app.route('/admin/patient/<int:id>/delete', methods=['POST'])
 def delete_patient(id):

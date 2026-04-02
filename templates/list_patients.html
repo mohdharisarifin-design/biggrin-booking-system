@@ -8,7 +8,10 @@
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h3 style="margin: 0;">Patient Directory</h3>
-        <a href="{{ url_for('add_patient') }}" class="btn btn-success">+ Add New Patient</a>
+        <div style="display: flex; gap: 10px;">
+            <a href="{{ url_for('bulk_upload_patients') }}" class="btn btn-primary">Bulk Upload</a>
+            <a href="{{ url_for('add_patient') }}" class="btn btn-success">+ Add New Patient</a>
+        </div>
     </div>
     
     <form method="GET" class="search-box">
