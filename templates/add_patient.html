@@ -40,6 +40,15 @@
             </label>
         </div>
         
+        <div class="form-group" style="display: flex; align-items: flex-start; margin-top: 20px; padding: 15px; background: #f7fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <label style="display: flex; align-items: flex-start; cursor: pointer; margin: 0;">
+                <input type="checkbox" name="pdpa_consent" id="pdpa_consent" required style="width: auto; margin-right: 10px; margin-top: 3px;">
+                <span style="font-size: 14px; line-height: 1.5;">
+                    <strong>PDPA Consent:</strong> I consent to Big Grin Dental Clinic collecting, using, and storing my personal data in accordance with the Personal Data Protection Act (PDPA). I understand that my information will be kept secure and used solely for dental treatment and clinic communication purposes.
+                </span>
+            </label>
+        </div>
+        
         <div class="form-group">
             <label>Patient Signature</label>
             <p style="font-size: 14px; color: #718096; margin-bottom: 10px;">Please sign below:</p>
@@ -120,6 +129,11 @@ canvas.addEventListener('touchend', stopDrawing);
 
 // Form validation
 document.getElementById('addPatientForm').addEventListener('submit', function(e) {
+    if (!document.getElementById('pdpa_consent').checked) {
+        e.preventDefault();
+        alert('Please agree to the PDPA consent to proceed');
+        return false;
+    }
     if (!document.getElementById('signatureData').value) {
         e.preventDefault();
         alert('Please provide a signature');

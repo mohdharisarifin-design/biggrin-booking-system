@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Financial Report - Dental Clinic{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Financial Report</h1>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">← Back</a>
+</div>
+
+<!-- View Type Tabs -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="{{ url_for('financial_report', view='daily') }}" class="btn {{ 'btn-primary' if view_type == 'daily' else 'btn-secondary' }}">Daily</a>
+        <a href="{{ url_for('financial_report', view='weekly') }}" class="btn {{ 'btn-primary' if view_type == 'weekly' else 'btn-secondary' }}">Weekly</a>
+        <a href="{{ url_for('financial_report', view='monthly') }}" class="btn {{ 'btn-primary' if view_type == 'monthly' else 'btn-secondary' }}">Monthly</a>
+    </div>
+</div>
+
+<!-- Date Range Filter -->
+<div class="card" style="margin-bottom: 20px;">
+    <form method="GET" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+        <input type="hidden" name="view" value="{{ view_type }}">
+        
+        <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+            <label for="start_date">From</label>
+            <input type="date" id="start_date" name="start_date" value="{{ start_date.strftime('%Y-%m-%d') }}">
+        </div>
+        
+        <div class="form-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+            <label for="end_date">To</label>
+            <input type="date" id="end_date" name="end_date" value="{{ end_date.strftime('%Y-%m-%d') }}">
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{{ url_for('financial_report', view=view_type) }}" class="btn btn-secondary">Reset</a>
+        </div>
+    </form>
+</div>
+
+<!-- Summary Cards -->
+<div class="grid">
+    <div class="stat-card" style="background: linear-gradient(135deg, #2d8a4e 0%, #1e6b38 100%);">
+        <h3>Total Collected</h3>
+        <div class="number">RM {{ total_collected }}</div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);">
+        <h3>Total Expected</h3>
+        <div class="number">RM {{ total_expected }}</div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #718096 0%, #4a5568 100%);">
+        <h3>Pending Payment</h3>
+        <div class="number">RM {{ total_pending }}</div>
+    </div>
+    
+    <div class="stat-card" style="background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);">
+        <h3>Total Appointments</h3>
+        <div class="number">{{ total_appointments }}</div>
+    </div>
+</div>
+
+<div class="grid" style="margin-top: 20px;">
+    <!-- Daily Breakdown -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>Daily Breakdown</h3>
+            <a href="{{ url_for('financial_report', view=view_type, start_date=start_date.strftime('%Y-%m-%d'), end_date=end_date.strftime('%Y-%m-%d'), download='csv') }}" class="btn btn-success">📥 Download CSV</a>
+        </div>
+        
+        {% if daily_data %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Appointments</th>
+                    <th>Collected</th>
+                    <th>Pending</th>
+                    <th>Expected</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for date, data in daily_data.items()|sort %}
+                <tr>
+                    <td>{{ date }}</td>
+                    <td>{{ data.count }}</td>
+                    <td style="color: #2d8a4e; font-weight: 600;">RM {{ data.collected }}</td>
+                    <td style="color: #e53e3e; font-weight: 600;">RM {{ data.pending }}</td>
+                    <td style="font-weight: 600;">RM {{ data.expected }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="text-align: center; padding: 40px; color: #a0aec0;">
+            <p>No data available for selected period</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Payment Methods -->
+    <div class="card">
+        <h3>Payment Methods</h3>
+        {% if payment_methods %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Method</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for method, amount in payment_methods.items() %}
+                <tr>
+                    <td>{{ method.title() }}</td>
+                    <td style="font-weight: 600;">RM {{ amount }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="text-align: center; padding: 40px; color: #a0aec0;">
+            <p>No payment data available</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Appointment Type Breakdown -->
+<div class="card" style="margin-top: 20px;">
+    <h3>Revenue by Appointment Type</h3>
+    {% if type_breakdown %}
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Count</th>
+                <th>Collected Revenue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for type, data in type_breakdown.items() %}
+            <tr>
+                <td>{{ appointment_types[type].name }}</td>
+                <td>{{ data.count }}</td>
+                <td style="font-weight: 600;">RM {{ data.revenue }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #a0aec0;">
+        <p>No appointment data available</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

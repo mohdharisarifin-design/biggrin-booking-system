@@ -102,6 +102,19 @@
                 </div>
             </div>
             {% endif %}
+            
+            <!-- PDPA Consent Status -->
+            <div style="margin-top: 20px;">
+                <label style="color: #718096; font-size: 14px;">PDPA Consent</label>
+                <div style="margin-top: 8px;">
+                    {% if patient.pdpa_consent %}
+                    <span class="badge" style="background: #c6f6d5; color: #22543d;">✓ Consented</span>
+                    <p style="font-size: 12px; color: #718096; margin-top: 5px;">Date: {{ patient.pdpa_consent_date.strftime('%d %b %Y %H:%M') if patient.pdpa_consent_date else 'N/A' }}</p>
+                    {% else %}
+                    <span class="badge" style="background: #fed7d7; color: #742a2a;">✗ Not Consented</span>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
 </div>

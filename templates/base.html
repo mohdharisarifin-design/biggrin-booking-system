@@ -439,6 +439,7 @@
             {% else %}
             <a href="{{ url_for('doctor_schedule') }}">My Schedule</a>
             {% endif %}
+            <a href="{{ url_for('financial_report') }}">Financial Report</a>
             <span class="user-info">{{ session.get('name') }} ({{ session.get('role') }})</span>
             {% if session.get('role') == 'admin' %}
             <a href="{{ url_for('settings') }}" style="display: flex; align-items: center; padding: 6px; border-radius: 6px; transition: background 0.2s;" title="Settings">

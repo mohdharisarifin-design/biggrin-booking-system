@@ -34,6 +34,8 @@ class Patient(db.Model):
     nric = db.Column(db.String(20), nullable=True)
     is_foreign = db.Column(db.Boolean, default=False)
     signature = db.Column(db.Text, nullable=True)  # Base64 encoded signature
+    pdpa_consent = db.Column(db.Boolean, default=False)  # PDPA consent for data storage
+    pdpa_consent_date = db.Column(db.DateTime, nullable=True)  # When consent was given
     registered_at = db.Column(db.DateTime, default=datetime.now)
 
 class ReminderLog(db.Model):
@@ -126,6 +128,24 @@ def init_db():
             db.session.execute(text("ALTER TABLE appointment ADD COLUMN payment_method VARCHAR(50)"))
             db.session.commit()
             print("[DB MIGRATION] Added 'payment_method' column to appointment table")
+        
+        try:
+            from sqlalchemy import text
+            db.session.execute(text("SELECT pdpa_consent FROM patient LIMIT 1"))
+        except Exception:
+            # pdpa_consent column doesn't exist, add it
+            db.session.execute(text("ALTER TABLE patient ADD COLUMN pdpa_consent BOOLEAN DEFAULT 0"))
+            db.session.commit()
+            print("[DB MIGRATION] Added 'pdpa_consent' column to patient table")
+        
+        try:
+            from sqlalchemy import text
+            db.session.execute(text("SELECT pdpa_consent_date FROM patient LIMIT 1"))
+        except Exception:
+            # pdpa_consent_date column doesn't exist, add it
+            db.session.execute(text("ALTER TABLE patient ADD COLUMN pdpa_consent_date DATETIME"))
+            db.session.commit()
+            print("[DB MIGRATION] Added 'pdpa_consent_date' column to patient table")
         
         # Create default users if they don't exist
         if not User.query.filter_by(username='admin').first():
@@ -509,6 +529,131 @@ def update_payment(id):
     flash('Payment status updated', 'success')
     return redirect(request.referrer or url_for('income_report'))
 
+@app.route('/financial-report')
+def financial_report():
+    """Comprehensive financial report for admin and doctor."""
+    if 'user_id' not in session or session.get('role') not in ['admin', 'doctor']:
+        return redirect(url_for('login'))
+    
+    today = datetime.now().date()
+    
+    # Get date range from query params
+    view_type = request.args.get('view', 'daily')  # daily, weekly, monthly
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+    
+    if start_date_str and end_date_str:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    else:
+        # Default ranges based on view type
+        if view_type == 'daily':
+            start_date = today
+            end_date = today
+        elif view_type == 'weekly':
+            start_date = today - timedelta(days=today.weekday())  # Start of week (Monday)
+            end_date = start_date + timedelta(days=6)
+        else:  # monthly
+            start_date = today.replace(day=1)
+            # Last day of month
+            if today.month == 12:
+                end_date = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
+            else:
+                end_date = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
+    
+    # Get all appointments in date range (not cancelled)
+    appointments = Appointment.query.filter(
+        Appointment.appointment_date >= start_date,
+        Appointment.appointment_date <= end_date
+    ).filter(Appointment.status != 'cancelled').order_by(Appointment.appointment_date).all()
+    
+    # Calculate daily breakdown
+    from collections import defaultdict
+    daily_data = defaultdict(lambda: {'collected': 0, 'pending': 0, 'expected': 0, 'count': 0})
+    
+    for appt in appointments:
+        date_key = appt.appointment_date.strftime('%Y-%m-%d')
+        fee = appt.fee or APPOINTMENT_TYPES[appt.appointment_type]['fee']
+        daily_data[date_key]['expected'] += fee
+        daily_data[date_key]['count'] += 1
+        if appt.payment_status == 'paid':
+            daily_data[date_key]['collected'] += fee
+        else:
+            daily_data[date_key]['pending'] += fee
+    
+    # Calculate totals
+    total_collected = sum(d['collected'] for d in daily_data.values())
+    total_pending = sum(d['pending'] for d in daily_data.values())
+    total_expected = sum(d['expected'] for d in daily_data.values())
+    total_appointments = sum(d['count'] for d in daily_data.values())
+    
+    # Payment method breakdown
+    payment_methods = defaultdict(int)
+    for appt in appointments:
+        if appt.payment_status == 'paid' and appt.payment_method:
+            payment_methods[appt.payment_method] += appt.fee or APPOINTMENT_TYPES[appt.appointment_type]['fee']
+    
+    # Appointment type breakdown
+    type_breakdown = defaultdict(lambda: {'count': 0, 'revenue': 0})
+    for appt in appointments:
+        fee = appt.fee or APPOINTMENT_TYPES[appt.appointment_type]['fee']
+        type_breakdown[appt.appointment_type]['count'] += 1
+        if appt.payment_status == 'paid':
+            type_breakdown[appt.appointment_type]['revenue'] += fee
+    
+    # Handle CSV download
+    if request.args.get('download') == 'csv':
+        import csv
+        import io
+        from flask import Response
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header
+        writer.writerow(['Date', 'Patient', 'Type', 'Fee (RM)', 'Payment Status', 'Method'])
+        
+        # Data rows
+        for appt in appointments:
+            writer.writerow([
+                appt.appointment_date.strftime('%Y-%m-%d'),
+                appt.patient.name,
+                APPOINTMENT_TYPES[appt.appointment_type]['name'],
+                appt.fee or APPOINTMENT_TYPES[appt.appointment_type]['fee'],
+                appt.payment_status,
+                appt.payment_method or '-'
+            ])
+        
+        # Summary rows
+        writer.writerow([])
+        writer.writerow(['Summary', '', '', '', '', ''])
+        writer.writerow(['Total Collected', f'RM {total_collected}', '', '', '', ''])
+        writer.writerow(['Total Pending', f'RM {total_pending}', '', '', '', ''])
+        writer.writerow(['Total Expected', f'RM {total_expected}', '', '', '', ''])
+        writer.writerow(['Total Appointments', total_appointments, '', '', '', ''])
+        
+        output.seek(0)
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename=financial_report_{start_date}_{end_date}.csv'
+            }
+        )
+    
+    return render_template('financial_report.html',
+                         view_type=view_type,
+                         start_date=start_date,
+                         end_date=end_date,
+                         daily_data=daily_data,
+                         total_collected=total_collected,
+                         total_pending=total_pending,
+                         total_expected=total_expected,
+                         total_appointments=total_appointments,
+                         payment_methods=dict(payment_methods),
+                         type_breakdown=dict(type_breakdown),
+                         appointment_types=APPOINTMENT_TYPES)
+
 @app.route('/admin/appointment/<int:id>/cancel', methods=['POST'])
 def cancel_appointment(id):
     if 'user_id' not in session or session.get('role') != 'admin':
@@ -641,6 +786,9 @@ def add_patient():
         address = request.form.get('address', '').strip()
         signature_data = request.form.get('signature_data', '').strip()
         
+        pdpa_consent = request.form.get('pdpa_consent') == 'on'
+        pdpa_consent_date = datetime.now() if pdpa_consent else None
+        
         # Check if patient with this phone already exists
         existing = Patient.query.filter_by(phone=phone).first()
         if existing:
@@ -655,7 +803,9 @@ def add_patient():
             nric=nric or None,
             is_foreign=is_foreign,
             address=address or None,
-            signature=signature_data or None
+            signature=signature_data or None,
+            pdpa_consent=pdpa_consent,
+            pdpa_consent_date=pdpa_consent_date
         )
         db.session.add(patient)
         db.session.commit()
