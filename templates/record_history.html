@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Record History - {{ record.title }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Version History</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('patient_records', id=record.patient_id) }}" class="btn btn-secondary">← Back to Records</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <h3>Current Version</h3>
+    <div style="background: #f7fafc; border-radius: 8px; padding: 15px; margin-top: 10px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span class="badge" style="background: #667eea; color: white;">{{ record.record_type|replace('_', ' ')|title }}</span>
+            <span style="font-size: 12px; color: #718096;">{{ record.updated_at.strftime('%d %b %Y at %H:%M') }}</span>
+        </div>
+        <h4>{{ record.title }}</h4>
+        <div style="white-space: pre-wrap; line-height: 1.6; margin-top: 10px;">{{ record.content }}</div>
+        <p style="font-size: 12px; color: #a0aec0; margin-top: 10px;">By {{ record.creator.name if record.creator else 'Unknown' }}</p>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Previous Versions ({{ history|length }} versions)</h3>
+    
+    {% if history %}
+    <div style="margin-top: 20px;">
+        {% for version in history %}
+        <div style="border-left: 3px solid #a0aec0; padding-left: 20px; margin-bottom: 20px; position: relative;">
+            <div style="position: absolute; left: -8px; top: 0; width: 14px; height: 14px; background: #a0aec0; border-radius: 50%;"></div>
+            
+            <div style="background: #f7fafc; border-radius: 8px; padding: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-weight: 600; color: #667eea;">Version {{ version.version_number }}</span>
+                    <span style="font-size: 12px; color: #718096;">{{ version.edited_at.strftime('%d %b %Y at %H:%M') }}</span>
+                </div>
+                
+                {% if version.change_summary %}
+                <p style="font-size: 12px; color: #4a5568; font-style: italic; margin-bottom: 10px; background: #feebc8; padding: 5px 10px; border-radius: 4px; display: inline-block;">
+                    Change: {{ version.change_summary }}
+                </p>
+                {% endif %}
+                
+                <h4 style="margin: 10px 0;">{{ version.title }}</h4>
+                <div style="white-space: pre-wrap; line-height: 1.6; color: #4a5568;">{{ version.content }}</div>
+                <p style="font-size: 12px; color: #a0aec0; margin-top: 10px;">By {{ version.editor.name if version.editor else 'Unknown' }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p style="color: #a0aec0; text-align: center; padding: 40px;">No previous versions. This is the first version of the record.</p>
+    {% endif %}
+</div>
+{% endblock %}

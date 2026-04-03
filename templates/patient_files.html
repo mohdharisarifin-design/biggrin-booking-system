@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Patient Files - {{ patient.name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Patient Files & Documents</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('patient_detail', id=patient.id) }}" class="btn btn-secondary">← Back to Patient</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <h3>Upload New File</h3>
+    <form method="POST" action="{{ url_for('upload_file', id=patient.id) }}" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file">Select File</label>
+            <input type="file" id="file" name="file" required accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.dcm">
+            <p style="font-size: 12px; color: #718096; margin-top: 5px;">
+                Allowed: PNG, JPG, PDF, DOC, DOCX, DCM (X-ray files). Max size: 50MB
+            </p>
+        </div>
+        
+        <div class="form-group">
+            <label for="file_type">File Type</label>
+            <select id="file_type" name="file_type" required>
+                <option value="xray">X-Ray / Medical Image</option>
+                <option value="document">Document (PDF, DOC)</option>
+                <option value="photo">Photo</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="description">Description (Optional)</label>
+            <textarea id="description" name="description" rows="2" placeholder="Brief description of this file..."></textarea>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Upload File</button>
+    </form>
+</div>
+
+<div class="grid">
+    <!-- X-Rays Section -->
+    <div class="card">
+        <h3>X-Rays & Medical Images ({{ files_by_type.xray|length }})</h3>
+        {% if files_by_type.xray %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+            {% for file in files_by_type.xray %}
+            <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
+                <div style="background: #f7fafc; height: 120px; display: flex; align-items: center; justify-content: center; border-radius: 4px; margin-bottom: 10px;">
+                    {% if file.filename.endswith('.dcm') %}
+                    <span style="font-size: 40px;">🩻</span>
+                    {% elif file.filename.endswith(('.png', '.jpg', '.jpeg')) %}
+                    <img src="/{{ file.file_path }}" style="max-width: 100%; max-height: 100%; object-fit: cover; border-radius: 4px;">
+                    {% else %}
+                    <span style="font-size: 40px;">📄</span>
+                    {% endif %}
+                </div>
+                <p style="font-size: 12px; font-weight: 600; margin-bottom: 5px; word-break: break-all;">{{ file.filename }}</p>
+                <p style="font-size: 11px; color: #718096; margin-bottom: 5px;">
+                    {{ (file.file_size / 1024)|round(1) }} KB
+                </p>
+                {% if file.description %}
+                <p style="font-size: 11px; color: #4a5568; margin-bottom: 5px;">{{ file.description }}</p>
+                {% endif %}
+                <p style="font-size: 10px; color: #a0aec0; margin-bottom: 10px;">
+                    Uploaded {{ file.uploaded_at.strftime('%d %b %Y') }}
+                </p>
+                <div style="display: flex; gap: 5px;">
+                    <a href="{{ url_for('download_file', file_id=file.id) }}" class="btn btn-sm btn-primary" style="flex: 1;">Download</a>
+                    <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display: inline;" onsubmit="return confirm('Delete this file?');">
+                        <button type="submit" class="btn btn-sm btn-danger" style="padding: 4px 8px;">🗑️</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #a0aec0; text-align: center; padding: 20px;">No X-rays uploaded yet</p>
+        {% endif %}
+    </div>
+
+    <!-- Documents Section -->
+    <div class="card">
+        <h3>Documents ({{ files_by_type.document|length }})</h3>
+        {% if files_by_type.document %}
+        <div style="margin-top: 15px;">
+            {% for file in files_by_type.document %}
+            <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="flex: 1;">
+                    <p style="font-weight: 600; margin-bottom: 5px;">{{ file.filename }}</p>
+                    <p style="font-size: 12px; color: #718096; margin-bottom: 3px;">
+                        {{ (file.file_size / 1024)|round(1) }} KB • Uploaded {{ file.uploaded_at.strftime('%d %b %Y') }}
+                    </p>
+                    {% if file.description %}
+                    <p style="font-size: 12px; color: #4a5568;">{{ file.description }}</p>
+                    {% endif %}
+                </div>
+                <div style="display: flex; gap: 5px;">
+                    <a href="{{ url_for('download_file', file_id=file.id) }}" class="btn btn-sm btn-primary">Download</a>
+                    <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display: inline;" onsubmit="return confirm('Delete this file?');">
+                        <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #a0aec0; text-align: center; padding: 20px;">No documents uploaded yet</p>
+        {% endif %}
+    </div>
+
+    <!-- Photos Section -->
+    <div class="card">
+        <h3>Photos ({{ files_by_type.photo|length }})</h3>
+        {% if files_by_type.photo %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 15px;">
+            {% for file in files_by_type.photo %}
+            <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                <div style="height: 100px; background: #f7fafc; display: flex; align-items: center; justify-content: center;">
+                    <img src="/{{ file.file_path }}" style="max-width: 100%; max-height: 100%; object-fit: cover;">
+                </div>
+                <div style="padding: 10px;">
+                    <p style="font-size: 11px; font-weight: 600; margin-bottom: 3px; word-break: break-all;">{{ file.filename[:20] }}{% if file.filename|length > 20 %}...{% endif %}</p>
+                    <p style="font-size: 10px; color: #718096; margin-bottom: 5px;">{{ file.uploaded_at.strftime('%d %b %Y') }}</p>
+                    <div style="display: flex; gap: 3px;">
+                        <a href="{{ url_for('download_file', file_id=file.id) }}" class="btn btn-sm btn-primary" style="flex: 1; font-size: 10px; padding: 3px 6px;">Download</a>
+                        <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display: inline;" onsubmit="return confirm('Delete this file?');">
+                            <button type="submit" class="btn btn-sm btn-danger" style="font-size: 10px; padding: 3px 6px;">🗑️</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #a0aec0; text-align: center; padding: 20px;">No photos uploaded yet</p>
+        {% endif %}
+    </div>
+
+    <!-- Other Files Section -->
+    <div class="card">
+        <h3>Other Files ({{ files_by_type.other|length }})</h3>
+        {% if files_by_type.other %}
+        <div style="margin-top: 15px;">
+            {% for file in files_by_type.other %}
+            <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="flex: 1;">
+                    <p style="font-weight: 600; margin-bottom: 5px;">{{ file.filename }}</p>
+                    <p style="font-size: 12px; color: #718096; margin-bottom: 3px;">
+                        {{ (file.file_size / 1024)|round(1) }} KB • Uploaded {{ file.uploaded_at.strftime('%d %b %Y') }}
+                    </p>
+                    {% if file.description %}
+                    <p style="font-size: 12px; color: #4a5568;">{{ file.description }}</p>
+                    {% endif %}
+                </div>
+                <div style="display: flex; gap: 5px;">
+                    <a href="{{ url_for('download_file', file_id=file.id) }}" class="btn btn-sm btn-primary">Download</a>
+                    <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display: inline;" onsubmit="return confirm('Delete this file?');">
+                        <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #a0aec0; text-align: center; padding: 20px;">No other files uploaded yet</p>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+input[type="file"] {
+    padding: 10px;
+    border: 2px dashed #e2e8f0;
+    border-radius: 8px;
+    width: 100%;
+    cursor: pointer;
+}
+input[type="file"]:hover {
+    border-color: #667eea;
+}
+</style>
+{% endblock %}

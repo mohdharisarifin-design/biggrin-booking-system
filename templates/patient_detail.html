@@ -6,9 +6,11 @@
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <h1>Patient Details</h1>
     <div style="display: flex; gap: 10px;">
-        <a href="{{ url_for('register_patient', id=patient.id) }}" class="btn btn-primary">Edit Details</a>
+        <a href="{{ url_for('patient_files', id=patient.id) }}" class="btn btn-primary">📁 Files</a>
+        <a href="{{ url_for('patient_records', id=patient.id) }}" class="btn btn-primary">📝 Medical Records</a>
+        <a href="{{ url_for('register_patient', id=patient.id) }}" class="btn btn-secondary">Edit Details</a>
         <a href="{{ url_for('book_appointment') }}" class="btn btn-success">+ Book Appointment</a>
-        <a href="{{ url_for('list_patients') }}" class="btn btn-secondary">← Back to Patients</a>
+        <a href="{{ url_for('list_patients') }}" class="btn btn-secondary">← Back</a>
     </div>
 </div>
 

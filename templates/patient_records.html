@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Medical Records - {{ patient.name }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Medical Records & Notes</h1>
+    <div style="display: flex; gap: 10px;">
+        <a href="{{ url_for('patient_detail', id=patient.id) }}" class="btn btn-secondary">← Back to Patient</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 20px;">
+    <h3>Add New Medical Record</h3>
+    <form method="POST" action="{{ url_for('add_record', id=patient.id) }}">
+        <div class="form-group">
+            <label for="record_type">Record Type</label>
+            <select id="record_type" name="record_type" required>
+                <option value="doctor_note">Doctor Note</option>
+                <option value="progress">Progress Update</option>
+                <option value="treatment_plan">Treatment Plan</option>
+                <option value="diagnosis">Diagnosis</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="title">Title *</label>
+            <input type="text" id="title" name="title" required placeholder="e.g., Initial Consultation, Follow-up Notes">
+        </div>
+        
+        <div class="form-group">
+            <label for="content">Content *</label>
+            <textarea id="content" name="content" rows="5" required placeholder="Enter medical notes, observations, treatment details..."></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="appointment_id">Related Appointment (Optional)</label>
+            <select id="appointment_id" name="appointment_id">
+                <option value="">-- Select Appointment --</option>
+                {% for appt in patient.appointments %}
+                <option value="{{ appt.id }}">{{ appt.appointment_date.strftime('%d %b %Y') }} - {{ appt.appointment_type }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Add Medical Record</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Medical Records Timeline ({{ records|length }} records)</h3>
+    
+    {% if records %}
+    <div style="margin-top: 20px;">
+        {% for record in records %}
+        <div style="border-left: 3px solid #667eea; padding-left: 20px; margin-bottom: 20px; position: relative;">
+            <!-- Timeline dot -->
+            <div style="position: absolute; left: -8px; top: 0; width: 14px; height: 14px; background: #667eea; border-radius: 50%;"></div>
+            
+            <div style="background: #f7fafc; border-radius: 8px; padding: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                    <div>
+                        <span class="badge" style="background: 
+                            {% if record.record_type == 'doctor_note' %}#bee3f8; color: #2a4365;
+                            {% elif record.record_type == 'progress' %}#9ae6b4; color: #22543d;
+                            {% elif record.record_type == 'treatment_plan' %}#feebc8; color: #744210;
+                            {% else %}#fed7d7; color: #742a2a;{% endif %}
+                            margin-bottom: 5px; display: inline-block;">
+                            {{ record.record_type|replace('_', ' ')|title }}
+                        </span>
+                        <h4 style="margin: 5px 0;">{{ record.title }}</h4>
+                    </div>
+                    <div style="text-align: right;">
+                        <p style="font-size: 12px; color: #718096;">{{ record.created_at.strftime('%d %b %Y') }}</p>
+                        <p style="font-size: 11px; color: #a0aec0;">By {{ record.creator.name if record.creator else 'Unknown' }}</p>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px; white-space: pre-wrap; line-height: 1.6;">{{ record.content }}</div>
+                
+                {% if record.appointment %}
+                <p style="font-size: 12px; color: #4a5568; margin-bottom: 10px;">
+                    Related to appointment: {{ record.appointment.appointment_date.strftime('%d %b %Y') }}
+                </p>
+                {% endif %}
+                
+                <div style="display: flex; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                    <button onclick="editRecord({{ record.id }}, '{{ record.title|escape }}', '{{ record.content|escape }}')" class="btn btn-sm btn-secondary">Edit</button>
+                    <a href="{{ url_for('view_record_history', record_id=record.id) }}" class="btn btn-sm btn-secondary">View History</a>
+                    <form method="POST" action="{{ url_for('delete_record', record_id=record.id) }}" style="display: inline; margin-left: auto;" onsubmit="return confirm('Delete this record permanently?');">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p style="color: #a0aec0; text-align: center; padding: 40px;">No medical records yet. Add your first record above.</p>
+    {% endif %}
+</div>
+
+<!-- Edit Modal -->
+<div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: white; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
+        <h3>Edit Medical Record</h3>
+        <form id="editForm" method="POST" action="">
+            <div class="form-group">
+                <label for="edit_title">Title *</label>
+                <input type="text" id="edit_title" name="title" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit_content">Content *</label>
+                <textarea id="edit_content" name="content" rows="6" required></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="change_summary">Change Summary</label>
+                <input type="text" id="change_summary" name="change_summary" placeholder="Brief description of what changed (e.g., 'Updated diagnosis')">
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" onclick="closeEditModal()" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editRecord(id, title, content) {
+    document.getElementById('editForm').action = '/patient/record/' + id + '/edit';
+    document.getElementById('edit_title').value = title.replace(/\\'/g, "'").replace(/\\"/g, '"');
+    document.getElementById('edit_content').value = content.replace(/\\'/g, "'").replace(/\\"/g, '"');
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('editModal');
+    if (event.target == modal) {
+        closeEditModal();
+    }
+}
+</script>
+{% endblock %}

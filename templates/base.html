@@ -439,6 +439,7 @@
             {% else %}
             <a href="{{ url_for('doctor_schedule') }}">My Schedule</a>
             <a href="{{ url_for('view_appointments') }}">Appointments</a>
+            <a href="{{ url_for('list_patients') }}">Patients</a>
             {% endif %}
             <a href="{{ url_for('financial_report') }}">Financial Report</a>
             <span class="user-info">{{ session.get('name') }} ({{ session.get('role') }})</span>

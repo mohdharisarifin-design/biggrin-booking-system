@@ -12,6 +12,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dental-clinic-secret-key-change-this-in-production'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///dental_clinic.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file upload
 
 db = SQLAlchemy(app)
 
@@ -62,6 +63,49 @@ class Appointment(db.Model):
     payment_method = db.Column(db.String(50), nullable=True)  # 'cash', 'card', 'online'
     
     patient = db.relationship('Patient', backref='appointments')
+
+class PatientFile(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    stored_filename = db.Column(db.String(255), nullable=False)
+    file_type = db.Column(db.String(20), nullable=False)  # 'xray', 'document', 'photo', 'other'
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer, nullable=False)  # in bytes
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.now)
+    description = db.Column(db.Text, nullable=True)
+    
+    patient = db.relationship('Patient', backref='files')
+    uploader = db.relationship('User', backref='uploaded_files')
+
+class PatientRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patient.id'), nullable=False)
+    record_type = db.Column(db.String(30), nullable=False)  # 'doctor_note', 'progress', 'treatment_plan', 'diagnosis'
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    appointment_id = db.Column(db.Integer, db.ForeignKey('appointment.id'), nullable=True)
+    
+    patient = db.relationship('Patient', backref='records')
+    creator = db.relationship('User', backref='created_records')
+    appointment = db.relationship('Appointment', backref='records')
+
+class PatientRecordHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    record_id = db.Column(db.Integer, db.ForeignKey('patient_record.id'), nullable=False)
+    version_number = db.Column(db.Integer, nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    edited_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    edited_at = db.Column(db.DateTime, default=datetime.now)
+    change_summary = db.Column(db.String(255), nullable=True)
+    
+    record = db.relationship('PatientRecord', backref='history')
+    editor = db.relationship('User', backref='record_edits')
 
 # ========== APPOINTMENT TYPES & DURATIONS ==========
 
@@ -167,6 +211,12 @@ def init_db():
             db.session.add(doctor)
         
         db.session.commit()
+        
+        # Create patient_folders directory if it doesn't exist
+        patient_folders_path = os.path.join('static', 'patient_folders')
+        if not os.path.exists(patient_folders_path):
+            os.makedirs(patient_folders_path)
+            print(f"[INIT] Created patient folders directory: {patient_folders_path}")
 
 def get_time_slots(date, exclude_appointment_id=None):
     """Get available time slots for a given date."""
@@ -460,7 +510,7 @@ def book_appointment():
 
 @app.route('/admin/appointments')
 def view_appointments():
-    if 'user_id' not in session or session.get('role') != 'admin':
+    if 'user_id' not in session or session.get('role') not in ['admin', 'doctor']:
         return redirect(url_for('login'))
     
     # Get date range from query params or default to today + 30 days
@@ -722,7 +772,7 @@ def reschedule_appointment(id):
 
 @app.route('/admin/patient/<int:id>')
 def patient_detail(id):
-    if 'user_id' not in session or session.get('role') != 'admin':
+    if 'user_id' not in session or session.get('role') not in ['admin', 'doctor']:
         return redirect(url_for('login'))
     
     patient = Patient.query.get_or_404(id)
@@ -760,7 +810,7 @@ def register_patient(id):
 
 @app.route('/admin/patients')
 def list_patients():
-    if 'user_id' not in session or session.get('role') != 'admin':
+    if 'user_id' not in session or session.get('role') not in ['admin', 'doctor']:
         return redirect(url_for('login'))
     
     search = request.args.get('search', '')
@@ -1528,6 +1578,256 @@ def update_reminder_config():
     
     flash('Reminder settings updated successfully', 'success')
     return redirect(url_for('settings'))
+
+# ========== PATIENT FOLDER ROUTES ==========
+
+import uuid
+from werkzeug.utils import secure_filename
+from flask import send_from_directory
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx', 'dcm'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_patient_folder_path(patient_id):
+    """Get or create patient folder path."""
+    base_path = os.path.join('static', 'patient_folders', str(patient_id))
+    if not os.path.exists(base_path):
+        os.makedirs(base_path)
+        # Create subdirectories
+        for subdir in ['xrays', 'documents', 'photos', 'other']:
+            os.makedirs(os.path.join(base_path, subdir), exist_ok=True)
+    return base_path
+
+@app.route('/patient/<int:id>/files')
+def patient_files(id):
+    """View all files for a patient."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    patient = Patient.query.get_or_404(id)
+    files = PatientFile.query.filter_by(patient_id=id).order_by(PatientFile.uploaded_at.desc()).all()
+    
+    # Group files by type
+    files_by_type = {'xray': [], 'document': [], 'photo': [], 'other': []}
+    for file in files:
+        files_by_type[file.file_type].append(file)
+    
+    return render_template('patient_files.html', 
+                         patient=patient, 
+                         files_by_type=files_by_type,
+                         files=files)
+
+@app.route('/patient/<int:id>/upload', methods=['POST'])
+def upload_file(id):
+    """Upload file to patient folder."""
+    if 'user_id' not in session or session.get('role') not in ['admin', 'doctor']:
+        return redirect(url_for('login'))
+    
+    patient = Patient.query.get_or_404(id)
+    
+    if 'file' not in request.files:
+        flash('No file selected', 'error')
+        return redirect(url_for('patient_files', id=id))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected', 'error')
+        return redirect(url_for('patient_files', id=id))
+    
+    if not allowed_file(file.filename):
+        flash('File type not allowed. Allowed: PNG, JPG, PDF, DOC, DOCX, DCM', 'error')
+        return redirect(url_for('patient_files', id=id))
+    
+    # Get file type from form
+    file_type = request.form.get('file_type', 'other')
+    description = request.form.get('description', '')
+    
+    # Generate unique filename
+    original_filename = secure_filename(file.filename)
+    file_ext = original_filename.rsplit('.', 1)[1].lower()
+    stored_filename = f"{uuid.uuid4()}.{file_ext}"
+    
+    # Get patient folder path
+    patient_folder = get_patient_folder_path(id)
+    
+    # Determine subfolder based on file type
+    subfolder = file_type if file_type in ['xrays', 'documents', 'photos'] else 'other'
+    upload_path = os.path.join(patient_folder, subfolder)
+    
+    # Save file
+    file_path = os.path.join(upload_path, stored_filename)
+    file.save(file_path)
+    
+    # Save to database
+    patient_file = PatientFile(
+        patient_id=id,
+        filename=original_filename,
+        stored_filename=stored_filename,
+        file_type=file_type,
+        file_path=os.path.join('static', 'patient_folders', str(id), subfolder, stored_filename),
+        file_size=os.path.getsize(file_path),
+        uploaded_by=session['user_id'],
+        description=description
+    )
+    db.session.add(patient_file)
+    db.session.commit()
+    
+    flash(f'File "{original_filename}" uploaded successfully', 'success')
+    return redirect(url_for('patient_files', id=id))
+
+@app.route('/patient/file/<int:file_id>/download')
+def download_file(file_id):
+    """Download a patient file."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    patient_file = PatientFile.query.get_or_404(file_id)
+    patient_folder = get_patient_folder_path(patient_file.patient_id)
+    
+    # Determine subfolder
+    subfolder = patient_file.file_type if patient_file.file_type in ['xrays', 'documents', 'photos'] else 'other'
+    file_path = os.path.join(patient_folder, subfolder, patient_file.stored_filename)
+    
+    return send_from_directory(os.path.dirname(file_path), 
+                              patient_file.stored_filename,
+                              as_attachment=True,
+                              download_name=patient_file.filename)
+
+@app.route('/patient/file/<int:file_id>/delete', methods=['POST'])
+def delete_file(file_id):
+    """Delete a patient file."""
+    if 'user_id' not in session or session.get('role') not in ['admin', 'doctor']:
+        return redirect(url_for('login'))
+    
+    patient_file = PatientFile.query.get_or_404(file_id)
+    patient_id = patient_file.patient_id
+    
+    # Delete physical file
+    patient_folder = get_patient_folder_path(patient_id)
+    subfolder = patient_file.file_type if patient_file.file_type in ['xrays', 'documents', 'photos'] else 'other'
+    file_path = os.path.join(patient_folder, subfolder, patient_file.stored_filename)
+    
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    
+    # Delete database record
+    db.session.delete(patient_file)
+    db.session.commit()
+    
+    flash('File deleted successfully', 'success')
+    return redirect(url_for('patient_files', id=patient_id))
+
+@app.route('/patient/<int:id>/records')
+def patient_records(id):
+    """View all medical records for a patient."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    patient = Patient.query.get_or_404(id)
+    records = PatientRecord.query.filter_by(patient_id=id).order_by(PatientRecord.created_at.desc()).all()
+    
+    return render_template('patient_records.html', patient=patient, records=records)
+
+@app.route('/patient/<int:id>/record', methods=['POST'])
+def add_record(id):
+    """Add a medical record for a patient."""
+    if 'user_id' not in session or session.get('role') not in ['admin', 'doctor']:
+        return redirect(url_for('login'))
+    
+    patient = Patient.query.get_or_404(id)
+    
+    record_type = request.form.get('record_type', 'doctor_note')
+    title = request.form.get('title', '').strip()
+    content = request.form.get('content', '').strip()
+    appointment_id = request.form.get('appointment_id') or None
+    
+    if not title or not content:
+        flash('Title and content are required', 'error')
+        return redirect(url_for('patient_records', id=id))
+    
+    record = PatientRecord(
+        patient_id=id,
+        record_type=record_type,
+        title=title,
+        content=content,
+        created_by=session['user_id'],
+        appointment_id=appointment_id
+    )
+    db.session.add(record)
+    db.session.commit()
+    
+    flash('Medical record added successfully', 'success')
+    return redirect(url_for('patient_records', id=id))
+
+@app.route('/patient/record/<int:record_id>/edit', methods=['POST'])
+def edit_record(record_id):
+    """Edit a medical record with version history."""
+    if 'user_id' not in session or session.get('role') not in ['admin', 'doctor']:
+        return redirect(url_for('login'))
+    
+    record = PatientRecord.query.get_or_404(record_id)
+    
+    new_title = request.form.get('title', '').strip()
+    new_content = request.form.get('content', '').strip()
+    change_summary = request.form.get('change_summary', 'Updated record').strip()
+    
+    if not new_title or not new_content:
+        flash('Title and content are required', 'error')
+        return redirect(url_for('patient_records', id=record.patient_id))
+    
+    # Save current version to history
+    version_count = PatientRecordHistory.query.filter_by(record_id=record_id).count()
+    history_entry = PatientRecordHistory(
+        record_id=record_id,
+        version_number=version_count + 1,
+        title=record.title,
+        content=record.content,
+        edited_by=session['user_id'],
+        change_summary=change_summary
+    )
+    db.session.add(history_entry)
+    
+    # Update record
+    record.title = new_title
+    record.content = new_content
+    record.updated_at = datetime.now()
+    
+    db.session.commit()
+    
+    flash('Medical record updated successfully', 'success')
+    return redirect(url_for('patient_records', id=record.patient_id))
+
+@app.route('/patient/record/<int:record_id>/delete', methods=['POST'])
+def delete_record(record_id):
+    """Delete a medical record."""
+    if 'user_id' not in session or session.get('role') not in ['admin', 'doctor']:
+        return redirect(url_for('login'))
+    
+    record = PatientRecord.query.get_or_404(record_id)
+    patient_id = record.patient_id
+    
+    # Delete history entries first
+    PatientRecordHistory.query.filter_by(record_id=record_id).delete()
+    
+    # Delete record
+    db.session.delete(record)
+    db.session.commit()
+    
+    flash('Medical record deleted successfully', 'success')
+    return redirect(url_for('patient_records', id=patient_id))
+
+@app.route('/patient/record/<int:record_id>/history')
+def view_record_history(record_id):
+    """View version history of a medical record."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    record = PatientRecord.query.get_or_404(record_id)
+    history = PatientRecordHistory.query.filter_by(record_id=record_id).order_by(PatientRecordHistory.version_number.desc()).all()
+    
+    return render_template('record_history.html', record=record, history=history)
 
 # ========== MAIN ==========
 
