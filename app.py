@@ -735,7 +735,9 @@ def reschedule_appointment(id):
             return render_template('reschedule_appointment.html',
                                  appointment=appointment,
                                  available_slots=available_slots,
-                                 selected_date=new_date)
+                                 selected_date=new_date,
+                                 today=datetime.now(),
+                                 appointment_types=APPOINTMENT_TYPES)
         
         duration = APPOINTMENT_TYPES[appointment.appointment_type]['duration']
         
@@ -745,7 +747,9 @@ def reschedule_appointment(id):
             return render_template('reschedule_appointment.html',
                                  appointment=appointment,
                                  available_slots=available_slots,
-                                 selected_date=new_date)
+                                 selected_date=new_date,
+                                 today=datetime.now(),
+                                 appointment_types=APPOINTMENT_TYPES)
         
         # Update appointment
         start_dt = datetime.combine(new_date, new_time)
@@ -764,11 +768,13 @@ def reschedule_appointment(id):
     selected_date = request.args.get('date', appointment.appointment_date.strftime('%Y-%m-%d'))
     selected_date = datetime.strptime(selected_date, '%Y-%m-%d').date()
     available_slots = get_time_slots(selected_date, exclude_appointment_id=id)
-    
+
     return render_template('reschedule_appointment.html',
                          appointment=appointment,
                          available_slots=available_slots,
-                         selected_date=selected_date)
+                         selected_date=selected_date,
+                         today=datetime.now(),
+                         appointment_types=APPOINTMENT_TYPES)
 
 @app.route('/admin/patient/<int:id>')
 def patient_detail(id):
