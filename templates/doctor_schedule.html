@@ -38,8 +38,13 @@
                 </div>
                 {% endif %}
             </div>
-            <div>
+            <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
                 <span class="badge badge-{{ appt.status }}">{{ appt.status.title() }}</span>
+                {% if appt.status == 'scheduled' %}
+                <form method="POST" action="{{ url_for('complete_appointment', id=appt.id) }}" style="display: inline;">
+                    <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Mark this appointment as completed?');">✓ Complete</button>
+                </form>
+                {% endif %}
             </div>
         </div>
         {% endfor %}

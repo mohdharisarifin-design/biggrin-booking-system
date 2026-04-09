@@ -60,11 +60,18 @@
                     <span class="badge badge-{{ appt.status }}">{{ appt.status.title() }}</span>
                 </td>
                 <td>
+                    {% if appt.status == 'scheduled' %}
                     {% set current_time = appt.start_time.strftime('%H:%M') ~ ' - ' ~ appt.end_time.strftime('%H:%M') %}
+                    <form method="POST" action="{{ url_for('complete_appointment', id=appt.id) }}" style="display: inline;">
+                        <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Mark this appointment as completed?');">✓ Complete</button>
+                    </form>
                     <button type="button" class="btn btn-sm btn-secondary" onclick='openReschedulePanel({{ appt.id }}, {{ appt.patient.name|tojson }}, {{ appt.appointment_date.strftime('%Y-%m-%d')|tojson }}, {{ current_time|tojson }}, {{ appointment_types[appt.appointment_type].name|tojson }})'>Reschedule</button>
                     <form method="POST" action="{{ url_for('cancel_appointment', id=appt.id) }}" style="display: inline;" onsubmit="return confirm('Cancel this appointment?');">
                         <button type="submit" class="btn btn-sm btn-danger">Cancel</button>
                     </form>
+                    {% elif appt.status == 'completed' %}
+                    <span style="color: #48bb78; font-weight: 600;">✓ Done</span>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

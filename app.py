@@ -745,6 +745,19 @@ def cancel_appointment(id):
     flash('Appointment cancelled successfully', 'success')
     return redirect(url_for('view_appointments'))
 
+@app.route('/admin/appointment/<int:id>/complete', methods=['POST'])
+def complete_appointment(id):
+    """Mark an appointment as completed."""
+    if 'user_id' not in session or session.get('role') not in ['admin', 'doctor']:
+        return redirect(url_for('login'))
+
+    appointment = Appointment.query.get_or_404(id)
+    appointment.status = 'completed'
+    db.session.commit()
+
+    flash('Appointment marked as completed', 'success')
+    return redirect(request.referrer or url_for('view_appointments'))
+
 @app.route('/admin/appointment/<int:id>/reschedule', methods=['GET', 'POST'])
 def reschedule_appointment(id):
     if 'user_id' not in session or session.get('role') != 'admin':
