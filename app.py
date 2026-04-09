@@ -481,8 +481,16 @@ def book_appointment():
                     patient.nric = nric
                 patient.is_foreign = is_foreign
         
-        # Create appointment with fee
-        fee = APPOINTMENT_TYPES[appointment_type]['fee']
+        # Create appointment with fee (use custom fee if provided, otherwise use default)
+        custom_fee = request.form.get('fee', '').strip()
+        if custom_fee:
+            try:
+                fee = int(custom_fee)
+            except ValueError:
+                fee = APPOINTMENT_TYPES[appointment_type]['fee']
+        else:
+            fee = APPOINTMENT_TYPES[appointment_type]['fee']
+
         appointment = Appointment(
             patient_id=patient.id,
             appointment_date=appointment_date,
@@ -577,6 +585,27 @@ def update_payment(id):
     db.session.commit()
     
     flash('Payment status updated', 'success')
+    return redirect(request.referrer or url_for('income_report'))
+
+@app.route('/admin/appointment/<int:id>/fee', methods=['POST'])
+def update_fee(id):
+    """Update fee for an appointment."""
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return redirect(url_for('login'))
+
+    appointment = Appointment.query.get_or_404(id)
+
+    new_fee = request.form.get('fee', '').strip()
+    if new_fee:
+        try:
+            appointment.fee = int(new_fee)
+            db.session.commit()
+            flash('Fee updated successfully', 'success')
+        except ValueError:
+            flash('Invalid fee amount', 'error')
+    else:
+        flash('Fee is required', 'error')
+
     return redirect(request.referrer or url_for('income_report'))
 
 @app.route('/financial-report')

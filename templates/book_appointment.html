@@ -19,8 +19,8 @@
                 <label for="appointment_type">Appointment Type *</label>
                 <select id="appointment_type" name="appointment_type" required onchange="updateSlotSelection()">
                     {% for key, info in appointment_types.items() %}
-                    <option value="{{ key }}" data-duration="{{ info.duration }}" {{ 'selected' if form_data and form_data.appointment_type == key else '' }}>
-                        {{ info.name }} ({{ info.duration }} min)
+                    <option value="{{ key }}" data-duration="{{ info.duration }}" data-fee="{{ info.fee }}" {{ 'selected' if form_data and form_data.appointment_type == key else '' }}>
+                        {{ info.name }} ({{ info.duration }} min) - RM {{ info.fee }}
                     </option>
                     {% endfor %}
                 </select>
@@ -47,6 +47,12 @@
                 {% endif %}
             </div>
             
+            <div class="form-group">
+                <label for="fee">Fee (RM) *</label>
+                <input type="number" id="fee" name="fee" min="0" step="1" value="{{ form_data.fee if form_data else '150' }}" required>
+                <p style="font-size: 12px; color: #718096; margin-top: 5px;">Default fee is set based on appointment type. You can edit this.</p>
+            </div>
+
             <div class="form-group">
                 <label for="notes">Notes (Optional)</label>
                 <textarea id="notes" name="notes" placeholder="Any special requirements or notes...">{{ form_data.notes if form_data else '' }}</textarea>
@@ -182,7 +188,23 @@ function updateSlotSelection() {
     if (selectedSlot) {
         selectSlot(selectedSlot);
     }
+    // Update fee based on selected appointment type
+    updateFeeFromType();
 }
+
+function updateFeeFromType() {
+    const typeSelect = document.getElementById('appointment_type');
+    const selectedOption = typeSelect.options[typeSelect.selectedIndex];
+    const fee = selectedOption.dataset.fee;
+    if (fee) {
+        document.getElementById('fee').value = fee;
+    }
+}
+
+// Initialize fee on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateFeeFromType();
+});
 
 // Patient search autocomplete
 let searchTimeout;
